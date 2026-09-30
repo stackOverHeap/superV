@@ -7,7 +7,8 @@
 RemoteCommandClient client;
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
+  delay(1000); // Attendre que le port série soit prêt
   LOGI("Initialisation du client WiFi");
   client.begin("MON_RESEAU", "MOT_DE_PASSE", 5000);
 }
@@ -22,3 +23,4 @@ void loop() {
      LOGW("Système inactif");
   }
 }
+

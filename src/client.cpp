@@ -11,7 +11,7 @@ void RemoteCommandClient::begin(const char* ssid, const char* password, uint16_t
     Serial.print(".");
   }
 
-  _server = WiFiServer(port);
+  _server = WiFiServer(port); // est ce vraiment nécessaire etant donné qu'on veut juste qu'elle se connecte à la carte des superviseurs ?
   _server.begin();
 
   Serial.println();

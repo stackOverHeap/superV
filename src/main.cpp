@@ -1,18 +1,24 @@
 #include <Arduino.h>
+#include "logging.hpp"
+#include "client.hpp"
 
-// put function declarations here:
-int myFunction(int, int);
+
+
+RemoteCommandClient client;
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+  Serial.begin(115200);
+  LOGI("Initialisation du client WiFi");
+  client.begin("MON_RESEAU", "MOT_DE_PASSE", 5000);
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-}
+  client.loop();
 
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+  if (client.isSystemRunning()) {
+       LOGI("Système actif");
+
+  } else {
+     LOGW("Système inactif");
+  }
 }

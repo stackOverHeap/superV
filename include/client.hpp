@@ -1,0 +1,32 @@
+// RemoteCommandClient.h
+#pragma once
+
+#include <Arduino.h>
+#include <WiFi.h>
+
+struct ClientInfo {
+  String deviceId;
+  String firmwareVersion;
+  String ipAddress;
+  String macAddress;
+  bool running;
+  unsigned long uptimeMs;
+};
+
+class RemoteCommandClient {
+public:
+  void begin(const char* ssid, const char* password, uint16_t port = 5000);
+  void loop();
+
+  void startSystem();
+  void stopSystem();
+  ClientInfo getClientInfo();
+  bool isSystemRunning() const;
+
+private:
+  bool _running = false;
+  WiFiServer _server;
+  WiFiClient _client;
+  String _deviceId = "Arduino_01";
+  String _firmwareVersion = "1.0.0";
+};

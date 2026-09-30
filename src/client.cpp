@@ -40,7 +40,7 @@ void RemoteCommandClient::loop() {
 
   if (cmd == "start") {
     startSystem();
-  } else if (cmd == "stop") {
+  } else if (cmd == "stop") {  // potentiel problème ici, le stop sera commun à chaque client, il faudrait changer localement les stop, start, et info pour controller individuellement chaque carte arduino
     stopSystem();
   } else if (cmd == "info") {
     ClientInfo info = getClientInfo();

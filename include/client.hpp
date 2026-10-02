@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include "protocol.hpp"
 
 struct ClientInfo {
   String deviceId;
@@ -24,9 +25,9 @@ public:
   bool isSystemRunning() const;
 
 private:
-  bool _running = false;
   WiFiServer _server;
-  WiFiClient _client;
+  ClientState _state = ClientState::WAITING;
+
   String _deviceId = "Arduino_01";
   String _firmwareVersion = "1.0.0";
 };

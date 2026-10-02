@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+
+#include "defines.hpp"
 #include "protocol.hpp"
 
 struct ClientInfo {
@@ -10,13 +12,17 @@ struct ClientInfo {
   String firmwareVersion;
   String ipAddress;
   String macAddress;
-  bool running;
-  unsigned long uptimeMs;
+  bool running = false;
+  unsigned long uptimeMs = 0;
 };
 
 class RemoteCommandClient {
 public:
-  void begin(const char* ssid, const char* password, uint16_t port = 5000);
+  void begin(
+      const char* ssid,
+      const char* password,
+      uint16_t port = DEFINE_SERVER_PORT);
+
   void loop();
 
   void startSystem();
@@ -25,9 +31,15 @@ public:
   bool isSystemRunning() const;
 
 private:
-  WiFiServer _server;
-  ClientState _state = ClientState::WAITING;
+  void connectToMaster();
 
+  WiFiClient _client;
+  IPAddress _masterAddress = IPAddress(192, 168, 10, 1);
+  uint16_t _serverPort = DEFINE_SERVER_PORT;
+  unsigned long _lastConnectAttemptMs = 0;
+  bool _hasAttemptedConnection = false;
+
+  ClientState _state = ClientState::WAITING;
   String _deviceId = "Arduino_01";
   String _firmwareVersion = "1.0.0";
 };

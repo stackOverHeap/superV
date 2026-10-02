@@ -6,6 +6,7 @@
 namespace {
 constexpr uint32_t MAX_PACKET_PAYLOAD = 4096;
 constexpr unsigned long PACKET_TIMEOUT_MS = 1000;
+constexpr unsigned long RECONNECT_INTERVAL_MS = 2000;
 constexpr size_t PACKET_HEADER_SIZE = 7;
 
 bool readExact(WiFiClient& client, uint8_t* buffer, size_t length) {
@@ -13,13 +14,14 @@ bool readExact(WiFiClient& client, uint8_t* buffer, size_t length) {
   size_t received = 0;
 
   while (received < length &&
-         client.connected() &&
          millis() - start < PACKET_TIMEOUT_MS) {
-    if (client.available()) {
+    if (client.available() > 0) {
       const int value = client.read();
       if (value >= 0) {
         buffer[received++] = static_cast<uint8_t>(value);
       }
+    } else if (!client.connected()) {
+      break;
     } else {
       delay(1);
     }
@@ -50,7 +52,8 @@ bool sendClientResponse(
 
   return length == 0 ||
          client.write(
-             reinterpret_cast<const uint8_t*>(payload.c_str()), length) == length;
+             reinterpret_cast<const uint8_t*>(payload.c_str()),
+             length) == length;
 }
 
 String stateName(ClientState state) {
@@ -93,6 +96,8 @@ void RemoteCommandClient::begin(
     const char* ssid,
     const char* password,
     uint16_t port) {
+  _serverPort = port;
+
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
@@ -100,22 +105,63 @@ void RemoteCommandClient::begin(
     Serial.print(".");
   }
 
-  _server.begin(port);
-
   Serial.println();
   Serial.println("WiFi connected");
+  Serial.print("Client IP: ");
   Serial.println(WiFi.localIP());
+  Serial.print("Connecting to supervisor at ");
+  Serial.print(_masterAddress);
+  Serial.print(":");
+  Serial.println(_serverPort);
+
+  connectToMaster();
+}
+
+void RemoteCommandClient::connectToMaster() {
+  if (WiFi.status() != WL_CONNECTED || _client.connected()) {
+    return;
+  }
+
+  const unsigned long now = millis();
+
+  if (_hasAttemptedConnection &&
+      now - _lastConnectAttemptMs < RECONNECT_INTERVAL_MS) {
+    return;
+  }
+
+  _hasAttemptedConnection = true;
+  _lastConnectAttemptMs = now;
+
+  _client.stop();
+
+  if (_client.connect(_masterAddress, _serverPort)) {
+    Serial.println("Connected to supervisor");
+  } else {
+    Serial.println("Could not connect to supervisor; will retry");
+  }
 }
 
 void RemoteCommandClient::loop() {
-  WiFiClient client = _server.available();
-  if (!client) {
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
+  // Si la connexion est perdue et qu'aucune donnée n'attend,
+  // on tente de joindre à nouveau le superviseur.
+  if (!_client.connected() && _client.available() == 0) {
+    _client.stop();
+    connectToMaster();
+    return;
+  }
+
+  if (_client.available() < static_cast<int>(PACKET_HEADER_SIZE)) {
     return;
   }
 
   uint8_t header[PACKET_HEADER_SIZE];
-  if (!readExact(client, header, sizeof(header))) {
-    client.stop();
+  if (!readExact(_client, header, sizeof(header))) {
+    Serial.println("Incomplete packet header");
+    _client.stop();
     return;
   }
 
@@ -124,6 +170,7 @@ void RemoteCommandClient::loop() {
       (static_cast<uint16_t>(header[1]) << 8);
 
   const uint8_t commandId = header[2];
+
   const uint32_t payloadLength =
       static_cast<uint32_t>(header[3]) |
       (static_cast<uint32_t>(header[4]) << 8) |
@@ -132,8 +179,8 @@ void RemoteCommandClient::loop() {
 
   if (signature != PROTOCOL_SIGNATURE ||
       payloadLength > MAX_PACKET_PAYLOAD) {
-    Serial.println("Paquet invalide ou trop volumineux");
-    client.stop();
+    Serial.println("Invalid packet signature or payload too large");
+    _client.stop();
     return;
   }
 
@@ -142,14 +189,17 @@ void RemoteCommandClient::loop() {
 
   for (uint32_t i = 0; i < payloadLength; ++i) {
     uint8_t byte;
-    if (!readExact(client, &byte, 1)) {
-      client.stop();
+
+    if (!readExact(_client, &byte, 1)) {
+      Serial.println("Incomplete packet payload");
+      _client.stop();
       return;
     }
+
     payload += static_cast<char>(byte);
   }
 
-  Serial.print("Commande reçue : ");
+  Serial.print("Command received: ");
   Serial.println(commandId);
 
   switch (static_cast<MasterCommand>(commandId)) {
@@ -163,60 +213,70 @@ void RemoteCommandClient::loop() {
 
     case MasterCommand::PAUSE:
       _state = ClientState::PAUSED;
-      Serial.println("Système en pause");
+      Serial.println("System paused");
       break;
 
     case MasterCommand::RESET:
       _state = ClientState::WAITING;
-      Serial.println("Système réinitialisé");
+      Serial.println("System reset");
       break;
 
     case MasterCommand::IDENT: {
       ClientInfo info = getClientInfo();
+
       String response = "{\"deviceId\":\"";
       response += info.deviceId;
       response += "\",\"firmwareVersion\":\"";
       response += info.firmwareVersion;
       response += "\"}";
 
-      sendClientResponse(client, ClientCommand::IDENT, response);
+      if (!sendClientResponse(_client, ClientCommand::IDENT, response)) {
+        Serial.println("Failed to send IDENT response");
+        _client.stop();
+      }
       break;
     }
 
     case MasterCommand::STATUS: {
       ClientInfo info = getClientInfo();
-      sendClientResponse(
-          client,
-          ClientCommand::STATUS,
-          makeInfoJson(info, _state));
+
+      if (!sendClientResponse(
+              _client,
+              ClientCommand::STATUS,
+              makeInfoJson(info, _state))) {
+        Serial.println("Failed to send STATUS response");
+        _client.stop();
+      }
       break;
     }
 
     case MasterCommand::CUSTOM:
-      Serial.println("Commande CUSTOM reçue, mais aucun gestionnaire n'est défini");
+      Serial.println("CUSTOM command received, but no handler is defined");
       break;
 
     case MasterCommand::INVALID:
     default:
-      Serial.println("Identifiant de commande inconnu");
+      Serial.println("Unknown command");
       break;
   }
 
-  client.stop();
+  // La connexion n'est pas fermée après chaque commande :
+  // elle reste disponible pour les échanges suivants.
 }
 
 void RemoteCommandClient::startSystem() {
   _state = ClientState::RUNNING;
-  Serial.println("Système démarré");
+  Serial.println("System started");
 }
 
 void RemoteCommandClient::stopSystem() {
   _state = ClientState::WAITING;
-  Serial.println("Système arrêté");
+  Serial.println("System stopped");
 }
 
 ClientInfo RemoteCommandClient::getClientInfo() {
   ClientInfo info;
+
   info.deviceId = _deviceId;
   info.firmwareVersion = _firmwareVersion;
   info.ipAddress = WiFi.localIP().toString();

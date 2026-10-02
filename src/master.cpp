@@ -5,7 +5,7 @@
 #include "protocol.hpp"
 
 template <size_t SIZE>
-static bool emplaceFree(AnimatorSeat (&seats)[SIZE], Animator (&locations)[SIZE], WiFiClient& client)
+static bool emplaceFree(AnimatorSeat(&seats)[SIZE], Animator(&locations)[SIZE], WiFiClient& client)
 {
     for (int i = 0; i < SIZE; i++)
     {
@@ -28,7 +28,7 @@ void Master::init()
     LOGI("Started server on port %u", m_ServerPort);
 }
 
-Master &Master::getInstance()
+Master& Master::getInstance()
 {
     static Master instance;
     return instance;
@@ -54,7 +54,7 @@ void Master::loop()
         if (seat == nullptr) // seat is empty, skip it
             continue;
 
-        Animator &animator = *seat;
+        Animator& animator = *seat;
 
         animator.poll();
 
@@ -64,7 +64,7 @@ void Master::loop()
             animator.kill(seat);
             continue;
         }
-        
+
     }
 
 }

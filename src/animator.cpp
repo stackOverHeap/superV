@@ -4,7 +4,7 @@
 
 uint8_t Animator::m_AnimatorCount = 0;
 
-static void discardBytes(WiFiClient &client, uint32_t length)
+static void discardBytes(WiFiClient& client, uint32_t length)
 {
     uint8_t buffer[32];
 
@@ -17,7 +17,7 @@ static void discardBytes(WiFiClient &client, uint32_t length)
 }
 
 
-Animator::Animator(const WiFiClient &client) : WiFiClient(client)
+Animator::Animator(const WiFiClient& client) : WiFiClient(client)
 {
     m_AnimatorCount++;
     sprintf(m_Name, "Unauthentified%u", m_AnimatorCount);
@@ -32,7 +32,7 @@ void Animator::poll()
         if (available() < static_cast<int>(sizeof(PacketHeader)))
             return;
 
-        readBytes(reinterpret_cast<uint8_t *>(&m_CurrentPacket), sizeof(m_CurrentPacket));
+        readBytes(reinterpret_cast<uint8_t*>(&m_CurrentPacket), sizeof(m_CurrentPacket));
 
         if (m_CurrentPacket.signature != PROTOCOL_SIGNATURE)
             return;
@@ -54,7 +54,7 @@ void Animator::poll()
         const size_t bytesRead = readBytes(m_Name, nameLength);
         m_Name[bytesRead] = '\0';
         discardBytes(*this, m_AwaitingData - bytesRead);
-        LOGI("Authenticated as %s", m_Name);    
+        LOGI("Authenticated as %s", m_Name);
     }
     else
     {
@@ -70,7 +70,7 @@ bool Animator::alive()
     return connected() || available() > 0;
 }
 
-void Animator::kill(AnimatorSeat &occupiedSeat)
+void Animator::kill(AnimatorSeat& occupiedSeat)
 {
     stop();
     occupiedSeat = nullptr;
@@ -89,12 +89,12 @@ bool Animator::sendCommand(MasterCommand command)
     return true;
 }
 
-char *Animator::getName()
+char* Animator::getName()
 {
     return m_Name;
 }
 
-void Animator::setName(char *nameString)
+void Animator::setName(char* nameString)
 {
     strncpy(m_Name, nameString, sizeof(m_Name));
 }

@@ -1,6 +1,5 @@
 #pragma once
 #include <WiFi.h>
-#include <Vector.h>
 
 #include "defines.hpp"
 #include "animator.hpp"

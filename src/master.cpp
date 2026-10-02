@@ -1,6 +1,5 @@
 #include "master.hpp"
 #include <WiFi.h>
-#include <Vector.h>
 
 #include "logging.hpp"
 #include "protocol.hpp"

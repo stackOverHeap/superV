@@ -1,0 +1,5 @@
+#pragma once
+
+#define DEFINE_MAX_CLIENT 4
+#define DEFINE_SERVER_PORT 90
+#define DEFINE_CLIENT_CUSTOM_MAX 8

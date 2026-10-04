@@ -2134,18 +2134,38 @@ def cmd_fuzz(
         else random.randrange(1 << 32)
     )
 
-    rng = random.Random(seed)
+    # Optional: only run the given test numbers, e.g. --test 17 or --test 3,17
+    only = set()
+
+    if ns.test:
+        only = {
+            int(x, 0)
+            for x in ns.test.split(",")
+            if x.strip()
+        }
+
+    last = max(only) if only else ns.iterations
 
     log(
         f"fuzzing {ns.host}:{ns.port}  "
         f"seed={seed}  "
-        f"iterations={ns.iterations}"
+        f"tests={'%s' % sorted(only) if only else ns.iterations}"
     )
 
-    failures = 0
+    failed_tests: List[int] = []
 
     try:
-        for i in range(ns.iterations):
+        # Tests are numbered from 1. Every test gets its own RNG derived from
+        # (seed, test number), so "--seed S --test N" regenerates exactly the
+        # same packet as test N of the original run.
+        for n in range(1, last + 1):
+            if only and n not in only:
+                continue
+
+            tag = f"test {n:03d}"
+
+            rng = random.Random(f"{seed}:{n}")
+
             data, desc, chunk = gen_packet(
                 rng
             )
@@ -2165,6 +2185,8 @@ def cmd_fuzz(
                 verbose=False,
             )
 
+            greeted = False
+
             try:
                 c.connect()
 
@@ -2175,6 +2197,19 @@ def cmd_fuzz(
                     )
                     is not None
                 )
+
+                # Identify the test to the board: its log will show
+                # "Received command IDENT from fuzz-test-NNN" (m_Name).
+                c.send(
+                    pack(
+                        CLIENT_CMDS["IDENT"],
+                        f"fuzz-test-{n:03d}".encode(),
+                    ),
+                    desc=f"IDENT {tag}",
+                )
+
+                # Let the board process it before the fuzzed packet arrives.
+                time.sleep(0.15)
 
                 c.send(
                     data,
@@ -2196,10 +2231,8 @@ def cmd_fuzz(
                     c.close()
 
             except OSError as e:
-                greeted = False
-
                 log(
-                    f"#{i:03d} "
+                    f"{tag} "
                     f"{desc}: socket error {e}"
                 )
 
@@ -2218,7 +2251,7 @@ def cmd_fuzz(
             )
 
             log(
-                f"#{i:03d} "
+                f"{tag}  "
                 f"{desc:<45} "
                 f"close={closing:<4} "
                 f"greeted={greeted!s:<5} "
@@ -2226,10 +2259,10 @@ def cmd_fuzz(
             )
 
             if status != "ok":
-                failures += 1
+                failed_tests.append(n)
 
                 fname = (
-                    f"fuzz-fail-{seed}-{i}.bin"
+                    f"fuzz-fail-{seed}-test{n:03d}.bin"
                 )
 
                 with open(fname, "wb") as fh:
@@ -2237,7 +2270,7 @@ def cmd_fuzz(
 
                 log(
                     red(
-                        f"    board unhealthy: "
+                        f"    {tag} FAILED - board unhealthy: "
                         f"{detail}"
                     )
                 )
@@ -2256,6 +2289,13 @@ def cmd_fuzz(
                     )
                 )
 
+                log(
+                    red(
+                        f"    reproduce with: "
+                        f"fuzz --seed {seed} --test {n}"
+                    )
+                )
+
                 if not ns.keep_going:
                     break
 
@@ -2270,16 +2310,19 @@ def cmd_fuzz(
     except KeyboardInterrupt:
         pass
 
-    print(
-        green("FUZZ: no failures")
-        if not failures
-        else red(
-            f"FUZZ: {failures} "
-            f"failure(s), seed={seed}"
-        )
-    )
+    if not failed_tests:
+        print(green("FUZZ: no failures"))
+    else:
+        nums = ", ".join(str(n) for n in failed_tests)
 
-    return 1 if failures else 0
+        print(
+            red(
+                f"FUZZ: {len(failed_tests)} failure(s), "
+                f"seed={seed}, failing test(s): {nums}"
+            )
+        )
+
+    return 1 if failed_tests else 0
 
 
 # --------------------------------------------------------------------------- #
@@ -3532,6 +3575,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--seed",
         type=int,
         help="reproduce a previous run",
+    )
+
+    p.add_argument(
+        "--test",
+        help=(
+            "only run these test numbers "
+            "(comma separated, e.g. 17 or 3,17); "
+            "use together with --seed to replay a failure"
+        ),
     )
 
     p.add_argument(

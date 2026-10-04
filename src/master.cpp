@@ -60,7 +60,6 @@ void Master::loop()
 
         if (!animator.alive()) // free seat if animator is not responding
         {
-            LOGI("Animator %s diconnected. (%u/%u)", animator.getName(), m_ConnectedClient, DEFINE_MAX_CLIENT);
             animator.kill(seat);
             continue;
         }

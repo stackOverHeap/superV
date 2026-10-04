@@ -2,19 +2,9 @@
 #include "logging.hpp"
 #include "protocol.hpp"
 
+using namespace Protocol;
+
 uint8_t Animator::m_AnimatorCount = 0;
-
-static void discardBytes(WiFiClient& client, uint32_t length)
-{
-    uint8_t buffer[32];
-
-    while (length > 0)
-    {
-        const size_t chunkLength = length < sizeof(buffer) ? length : sizeof(buffer);
-        client.readBytes(buffer, chunkLength);
-        length -= chunkLength;
-    }
-}
 
 
 Animator::Animator(const WiFiClient& client) : WiFiClient(client)
@@ -27,54 +17,147 @@ Animator::Animator(const WiFiClient& client) : WiFiClient(client)
 
 void Animator::poll()
 {
-    if (m_AwaitingData == 0)
+    const uint32_t now = millis();
+    int avail = available();
+
+    if (avail > m_LastAvail)
+        m_LastReceptionMS = now;
+
+    // Mid-packet, or leftover bytes while WAITING (= a partial signature,
+    // since garbage is flushed every poll). Idle + empty never times out.
+    // DATA is excluded: it is a complete packet processed on the next call.
+    const bool midPacket = (m_CurrentPacketStatus != PacketReceptionStatus::WAITING)
+                        && (m_CurrentPacketStatus != PacketReceptionStatus::DATA);
+    const bool incomplete = midPacket || (avail > 0);
+
+    const auto sinceLastReception = now - m_LastReceptionMS;
+    if (incomplete && sinceLastReception > DEFINE_RX_TIMEOUT_MS)
     {
-        if (available() < static_cast<int>(sizeof(PacketHeader)))
-            return;
+        LOGW("Packet reception from %s timed out, dropping partial data.", m_Name);
 
-        readBytes(reinterpret_cast<uint8_t*>(&m_CurrentPacket), sizeof(m_CurrentPacket));
+        uint8_t trash[32];
+        while (avail > 0)                          // drain with few modem calls
+        {
+            const size_t n = readBytes(trash, min(static_cast<size_t>(avail), sizeof(trash)));
+            if (n == 0)
+                break;
+            avail -= n;
+        }
 
-        if (m_CurrentPacket.signature != PROTOCOL_SIGNATURE)
-            return;
-
-        m_AwaitingData = m_CurrentPacket.followingLength;
+        m_CurrentPacketStatus = PacketReceptionStatus::WAITING;
+        m_PacketBytesLeft = sizeof(PacketSignature);
+        m_LastAvail = 0;
+        return;
     }
 
-    if (m_AwaitingData == 0)
+    receive(avail);
+    m_LastAvail = avail;                           // must be what is really left
+}
+
+void Animator::receive(int& avail)
+{
+    if (m_CurrentPacketStatus == PacketReceptionStatus::WAITING)
+    {
+        while (avail && peek() != (PROTOCOL_SIGNATURE & 0xFF))
+        {
+            read();
+            avail--;
+        } // flush garbage
+
+        if (avail < 2)
+            return; // idle, or lone signature byte -> the timeout in poll() handles it
+
+        read(); // take the first known good byte of the signature
+        avail--;
+
+        if (peek() == ((PROTOCOL_SIGNATURE >> 8) & 0xFF))
+        {
+            read(); // consume the second byte
+            avail--;
+            m_CurrentPacketStatus = PacketReceptionStatus::SIGNATURE;
+            m_PacketBytesLeft = sizeof(PacketHeader);
+        }
+
+        return;
+    }
+
+    if (avail < m_PacketBytesLeft) // not enough bytes in the RX buffer to satisfy what is wanted
         return;
 
-    if (available() < static_cast<int>(m_AwaitingData))
+    if (m_CurrentPacketStatus == PacketReceptionStatus::SIGNATURE)
+    {
+        readBytes(reinterpret_cast<uint8_t*>(&m_CurrentPacket), sizeof(PacketHeader));
+        avail -= sizeof(PacketHeader);
+
+        if (m_CurrentPacket.followingLength > 0)
+        {
+            if (m_CurrentPacket.followingLength > sizeof(m_DataBuffer)) // skip if size does not fit buffer
+            {
+                m_CurrentPacketStatus = PacketReceptionStatus::WAITING;
+                m_PacketBytesLeft = sizeof(PacketSignature);
+            }
+            else
+            {
+                m_CurrentPacketStatus = PacketReceptionStatus::HEADER;
+                m_PacketBytesLeft = m_CurrentPacket.followingLength;
+            }
+        }
+        else
+        {
+            m_CurrentPacketStatus = PacketReceptionStatus::DATA;
+            m_PacketBytesLeft = 0;
+        }
+
         return;
-
-    if (m_CurrentPacket.clientCommandID == ClientCommand::IDENT)
-    {
-        const size_t nameLength = m_AwaitingData < sizeof(m_Name) - 1
-            ? m_AwaitingData
-            : sizeof(m_Name) - 1;
-        const size_t bytesRead = readBytes(m_Name, nameLength);
-        m_Name[bytesRead] = '\0';
-        discardBytes(*this, m_AwaitingData - bytesRead);
-        LOGI("Authenticated as %s", m_Name);
-    }
-    else
-    {
-        discardBytes(*this, m_AwaitingData);
     }
 
-    m_AwaitingData = 0;
-    m_CurrentPacket = {};
+    if (m_CurrentPacketStatus == PacketReceptionStatus::HEADER)
+    {
+        readBytes(reinterpret_cast<uint8_t*>(&m_DataBuffer), m_CurrentPacket.followingLength);
+        avail -= m_CurrentPacket.followingLength;
+
+        m_CurrentPacketStatus = PacketReceptionStatus::DATA;
+        m_PacketBytesLeft = 0;
+
+        return;
+    }
+
+    if (m_CurrentPacketStatus == PacketReceptionStatus::DATA)
+    {
+        LOGI("Received command %s from %s", COMMANDS[static_cast<uint8_t>(m_CurrentPacket.clientCommandID)], m_Name);
+
+        switch (m_CurrentPacket.clientCommandID)
+        {
+        case ClientCommand::IDENT:
+            if (m_CurrentPacket.followingLength == 0)
+                break;
+            memset(m_Name, 0, sizeof(m_Name));
+            strncpy(m_Name, m_DataBuffer, sizeof(m_Name) - 1);
+            break;
+
+        case ClientCommand::ALIVE:
+            break;
+        default:
+            break;
+        }
+        m_CurrentPacketStatus = PacketReceptionStatus::WAITING;
+        m_PacketBytesLeft = sizeof(PacketSignature);
+
+        return;
+    }
 }
 
 bool Animator::alive()
 {
-    return connected() || available() > 0;
+    return connected();
 }
 
 void Animator::kill(AnimatorSeat& occupiedSeat)
 {
+    m_AnimatorCount--;
+    LOGI("Animator %s disconnected. (%u/%u)", m_Name, m_AnimatorCount, DEFINE_MAX_CLIENT);
     stop();
     occupiedSeat = nullptr;
-    m_AnimatorCount--;
 }
 
 bool Animator::sendCommand(MasterCommand command)

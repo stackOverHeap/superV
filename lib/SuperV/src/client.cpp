@@ -12,7 +12,10 @@ using Protocol::MasterCommand;
 constexpr uint32_t MAX_PACKET_PAYLOAD = 4096;
 constexpr unsigned long PACKET_TIMEOUT_MS = 1000;
 constexpr unsigned long RECONNECT_INTERVAL_MS = 2000;
+constexpr unsigned long REALTIME_POLL_INTERVAL_MS = 10;
+constexpr unsigned long REALTIME_WIFI_CHECK_INTERVAL_MS = 1000;
 constexpr size_t PACKET_HEADER_SIZE = 7;
+constexpr size_t REALTIME_READ_LIMIT = 256;
 
 bool readExact(WiFiClient& client, uint8_t* buffer, size_t length) {
   const unsigned long start = millis();
@@ -68,6 +71,10 @@ String stateName(ClientState state) {
   }
 }
 
+RemoteCommandClient::RemoteCommandClient(bool realTimeNeed) : m_realTime(realTimeNeed)
+{
+}
+
 void RemoteCommandClient::setup()
 {
   WiFi.begin("supervisor-net");
@@ -85,8 +92,9 @@ void RemoteCommandClient::setup()
   connectToMaster();
 }
 
-void RemoteCommandClient::connectToMaster() {
-  if (WiFi.status() != WL_CONNECTED || _client.connected()) {
+void RemoteCommandClient::connectToMaster(bool connectionKnownLost) {
+  if (WiFi.status() != WL_CONNECTED ||
+    (!connectionKnownLost && _client.connected())) {
     return;
   }
 
@@ -110,7 +118,20 @@ void RemoteCommandClient::connectToMaster() {
   }
 }
 
-void RemoteCommandClient::loop() {
+void RemoteCommandClient::loop()
+{
+  if (m_realTime)
+  {
+    realTimeLoop();
+  }
+  else
+  {
+    normalLoop();
+  }
+}
+
+void RemoteCommandClient::normalLoop() {
+
   if (WiFi.status() != WL_CONNECTED) {
     return;
   }
@@ -236,11 +257,200 @@ void RemoteCommandClient::loop() {
   // elle reste disponible pour les échanges suivants.
 }
 
+void RemoteCommandClient::realTimeLoop()
+{
+  const unsigned long now = millis();
+  if (now - _lastRealtimePollMs < REALTIME_POLL_INTERVAL_MS) {
+    return;
+  }
+  _lastRealtimePollMs = now;
+
+  if (now - _lastRealtimeWifiCheckMs >= REALTIME_WIFI_CHECK_INTERVAL_MS) {
+    _lastRealtimeWifiCheckMs = now;
+    if (WiFi.status() != WL_CONNECTED) {
+      resetReceiveState();
+      return;
+    }
+  }
+
+  if (m_receiveHeaderBytes > 0 &&
+    now - _receiveStartedMs >= PACKET_TIMEOUT_MS) {
+    LOGW("Incomplete packet");
+    resetReceiveState();
+    _client.stop();
+    return;
+  }
+
+  int available = _client.available();
+  if (available <= 0) {
+    if (now - _lastRealtimeReconnectCheckMs >= RECONNECT_INTERVAL_MS) {
+      _lastRealtimeReconnectCheckMs = now;
+      if (!_client.connected()) {
+        resetReceiveState();
+        connectToMaster(true);
+      }
+    }
+    return;
+  }
+
+  if (m_receiveHeaderBytes < PACKET_HEADER_SIZE) {
+    if (m_receiveHeaderBytes == 0) {
+      _receiveStartedMs = now;
+    }
+    const size_t headerBytesNeeded = PACKET_HEADER_SIZE - m_receiveHeaderBytes;
+    const size_t bytesToRead = available < static_cast<int>(headerBytesNeeded)
+      ? static_cast<size_t>(available)
+      : headerBytesNeeded;
+    const int bytesRead = _client.read(
+      m_receiveHeader + m_receiveHeaderBytes,
+      bytesToRead);
+    if (bytesRead <= 0) {
+      return;
+    }
+    m_receiveHeaderBytes += static_cast<uint8_t>(bytesRead);
+    available -= bytesRead;
+
+    if (m_receiveHeaderBytes < PACKET_HEADER_SIZE) {
+      return;
+    }
+
+    const uint16_t signature =
+      static_cast<uint16_t>(m_receiveHeader[0]) |
+      (static_cast<uint16_t>(m_receiveHeader[1]) << 8);
+
+    m_receiveCommand = m_receiveHeader[2];
+    m_receivePayloadLength =
+      static_cast<uint32_t>(m_receiveHeader[3]) |
+      (static_cast<uint32_t>(m_receiveHeader[4]) << 8) |
+      (static_cast<uint32_t>(m_receiveHeader[5]) << 16) |
+      (static_cast<uint32_t>(m_receiveHeader[6]) << 24);
+
+    if (signature != PROTOCOL_SIGNATURE ||
+      m_receivePayloadLength > MAX_PACKET_PAYLOAD) {
+      LOGW("Invalid packet signature or payload too large");
+      resetReceiveState();
+      _client.stop();
+      return;
+    }
+
+    m_receivePayload = "";
+    m_receivePayload.reserve(m_receivePayloadLength);
+  }
+
+  if (m_receivePayload.length() < m_receivePayloadLength && available > 0) {
+    char payloadChunk[REALTIME_READ_LIMIT];
+    const uint32_t payloadBytesNeeded =
+      m_receivePayloadLength - m_receivePayload.length();
+    size_t bytesToRead = available < static_cast<int>(REALTIME_READ_LIMIT)
+      ? static_cast<size_t>(available)
+      : REALTIME_READ_LIMIT;
+    if (bytesToRead > payloadBytesNeeded) {
+      bytesToRead = payloadBytesNeeded;
+    }
+
+    const int bytesRead = _client.read(
+      reinterpret_cast<uint8_t*>(payloadChunk),
+      bytesToRead);
+    if (bytesRead <= 0) {
+      return;
+    }
+    m_receivePayload.concat(
+      payloadChunk,
+      static_cast<unsigned int>(bytesRead));
+  }
+
+  if (m_receivePayload.length() < m_receivePayloadLength) {
+    return;
+  }
+
+  const uint8_t commandId = m_receiveCommand;
+  const String& payload = m_receivePayload;
+  LOGI("Command received: %u", commandId);
+
+  switch (static_cast<MasterCommand>(commandId)) {
+  case MasterCommand::START:
+    startSystem();
+    break;
+
+  case MasterCommand::STOP:
+    stopSystem();
+    break;
+
+  case MasterCommand::PAUSE:
+    pauseSystem();
+    break;
+
+  case MasterCommand::RESET:
+    resetSystem();
+    break;
+
+  case MasterCommand::IDENT: {
+    // The supervisor stores the IDENT payload directly as the client name.
+    if (!sendClientResponse(_client, ClientCommand::IDENT, _deviceId.c_str(), _deviceId.length())) {
+      LOGE("Failed to send IDENT response");
+      _client.stop();
+    }
+    break;
+  }
+
+  case MasterCommand::ALIVE:
+    if (!sendClientResponse(_client, ClientCommand::ALIVE, nullptr, 0)) {
+      LOGE("Failed to send ALIVE response");
+      _client.stop();
+    }
+    break;
+
+  case MasterCommand::STATUS: {
+    ClientInfo info = getClientInfo();
+
+    if (!sendClientResponse(_client, ClientCommand::STATUS, nullptr, 0))
+    {
+      LOGE("Failed to send STATUS response");
+      _client.stop();
+    }
+    break;
+  }
+
+  case MasterCommand::CUSTOM:
+    if (_handlers.onCustom != nullptr) {
+      _handlers.onCustom(
+        _handlerContext,
+        payload.c_str(),
+        payload.length());
+    }
+    else {
+      LOGW("CUSTOM command received, but no handler is defined");
+    }
+    break;
+
+  case MasterCommand::INVALID:
+  default:
+    LOGW("Unknown command: %u", commandId);
+    break;
+  }
+
+  resetReceiveState();
+}
+
+void RemoteCommandClient::resetReceiveState()
+{
+  m_receiveHeaderBytes = 0;
+  m_receiveCommand = 0;
+  m_receivePayloadLength = 0;
+  _receiveStartedMs = 0;
+  m_receivePayload = "";
+}
+
 void RemoteCommandClient::setCommandHandlers(
   const ClientCommandHandlers& handlers,
   void* context) {
   _handlers = handlers;
   _handlerContext = context;
+}
+
+void RemoteCommandClient::setRealTimeNeed(bool realTimeNeed)
+{
+  m_realTime = realTimeNeed;
 }
 
 void RemoteCommandClient::setIdentity(const char* deviceId) {

@@ -54,6 +54,15 @@ Master& Master::getInstance()
     return instance;
 }
 
+bool Master::sendCommandToPeer(uint8_t peerIndex, Protocol::MasterCommand command)
+{
+    if (peerIndex >= DEFINE_MAX_CLIENT || m_Seats[peerIndex] == nullptr)
+        return false;
+
+    Animator& animator = *m_Seats[peerIndex];
+    return animator.alive() && animator.sendCommand(command);
+}
+
 void Master::loop()
 {
     WiFiClient client = m_Server.accept();

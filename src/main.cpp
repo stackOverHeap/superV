@@ -5,17 +5,21 @@
 #error "Select exactly one build mode: MASTER_MODE or CLIENT_MODE"
 #elif defined(MASTER_MODE)
 #include <superv/master.hpp>
+#include <interface.hpp>
 
 Master& master = Master::getInstance();
+Interface interface;
 
 void setup() {
   Serial.begin(9600);
   LOGI("Starting SuperV in master mode");
   master.init();
+  interface.begin();
 }
 
 void loop() {
   master.loop();
+  interface.loop(master);
 }
 
 #elif defined(CLIENT_MODE)

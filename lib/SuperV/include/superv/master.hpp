@@ -21,5 +21,6 @@ public:
     static Master &getInstance();
     void loop();
     void init();
+    bool sendCommandToPeer(uint8_t peerIndex, Protocol::MasterCommand command);
 
 };

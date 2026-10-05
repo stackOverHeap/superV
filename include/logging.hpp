@@ -9,14 +9,26 @@
 #endif
 
 #ifdef LOGGING
-#define LOGE(msg, ...) \
-    printf("[%u]" "[" __FILE__ "]" " ERROR : " msg  "\n", millis(), ##__VA_ARGS__)
 
-#define LOGW(msg, ...) \
-    printf("[%u]" "[" __FILE__ "]" " WARNING : " msg "\n", millis(), ##__VA_ARGS__)
+#ifndef NO_COLOR
+#define LOG_COLOR_RESET "\033[0m"
+#define LOG_COLOR_RED "\033[31m"
+#define LOG_COLOR_YELLOW "\033[33m"
+#define LOG_COLOR_GREEN "\033[32m"
+#else
+#define LOG_COLOR_RESET ""
+#define LOG_COLOR_RED ""
+#define LOG_COLOR_YELLOW ""
+#define LOG_COLOR_GREEN ""
+#endif
 
-#define LOGI(msg, ...) \
-    printf("[%u]" "[" __FILE__ "]" " INFO : " msg "\n", millis(), ##__VA_ARGS__)
+#define LOG_BASE(level, color, msg, ...) \
+    printf("[%lu][" __FILE__ "] " color level LOG_COLOR_RESET " : " msg "\n", \
+           (unsigned long)millis(), ##__VA_ARGS__)
+
+#define LOGE(msg, ...) LOG_BASE("ERROR", LOG_COLOR_RED, msg, ##__VA_ARGS__)
+#define LOGW(msg, ...) LOG_BASE("WARNING", LOG_COLOR_YELLOW, msg, ##__VA_ARGS__)
+#define LOGI(msg, ...) LOG_BASE("INFO", LOG_COLOR_GREEN, msg, ##__VA_ARGS__)
 
 #else
 

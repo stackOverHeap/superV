@@ -6,30 +6,47 @@
 
 class Animator;
 
-using AnimatorSeat = Animator *;
+using AnimatorSeat = Animator*;
+
+enum class PacketReceptionStatus
+{
+    WAITING,
+    SIGNATURE,
+    HEADER,
+    DATA,
+    PROCESSED,
+    TIMEDOUT
+};
 
 class Animator : private WiFiClient
-{ 
+{
     static uint8_t m_AnimatorCount;
+    char m_Name[STATIC_BUFFER_SIZE] = { 0 };
 
-    PacketHeader m_CurrentPacket;
-    uint32_t m_AwaitingData = 0;
-    char m_Name[64] = {0};
+    Protocol::PacketHeader m_CurrentPacket;
+    PacketReceptionStatus m_CurrentPacketStatus = PacketReceptionStatus::WAITING;
+    uint32_t m_PacketBytesLeft = 0;
+    int      m_LastAvail = 0;       // bytes still in the RX buffer after the previous poll
+    uint32_t m_LastReceptionMS = 0;
+    char m_DataBuffer[STATIC_BUFFER_SIZE] = { 0 };
+
+    void receive(int& avail);
 
     // TODO : implement the custom command list here
 
 public:
     Animator() = default;
-    Animator(const WiFiClient &client);
+    Animator(const WiFiClient& client);
     ~Animator() = default;
 
     void poll();
     bool alive();
     void kill(AnimatorSeat& occupiedSeat);
+    inline uint8_t getCount() { return m_AnimatorCount; };
 
-    bool sendCommand(MasterCommand command);
-    char *getName();
+    bool sendCommand(Protocol::MasterCommand command);
+    char* getName();
 
-    void setName(char *nameString);
-    bool addCustom(char *commandString, int len);
+    void setName(char* nameString);
+    bool addCustom(char* commandString, int len);
 };

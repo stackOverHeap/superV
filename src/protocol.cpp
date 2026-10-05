@@ -3,13 +3,28 @@
 #include <WiFi.h>
 #include <string.h>
 
-namespace
+#ifdef LOGGING
+char* COMMANDS[256] =
 {
-bool writePacket(WiFiClient& client, MasterCommand command, const uint8_t* data, uint32_t length)
+    "INVALID",
+    "IDENT",
+    "STATUS",
+    "ALIVE",
+    "CUSTOM",
+    "START",
+    "STOP",
+    "PAUSED",
+    "RESET"
+};
+#endif
+
+namespace Protocol
 {
+bool writePacket(WiFiClient& client, Protocol::MasterCommand command, const uint8_t* data, uint32_t length)
+{
+    const Protocol::PacketSignature sig = PROTOCOL_SIGNATURE;
+
     const uint8_t header[] = {
-        PROTOCOL_SIGNATURE,
-        PROTOCOL_SIGNATURE >> 8,
         static_cast<uint8_t>(command),
         static_cast<uint8_t>(length),
         static_cast<uint8_t>(length >> 8),
@@ -17,6 +32,9 @@ bool writePacket(WiFiClient& client, MasterCommand command, const uint8_t* data,
         static_cast<uint8_t>(length >> 24),
     };
 
+    if (client.write(reinterpret_cast<const uint8_t*>(&sig), sizeof(PacketSignature)) != sizeof(PacketSignature))
+        return false;
+    
     if (client.write(header, sizeof(header)) != sizeof(header))
         return false;
 

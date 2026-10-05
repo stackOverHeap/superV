@@ -1,8 +1,8 @@
 #pragma once
 #include <WiFi.h>
 
-#include "defines.hpp"
-#include "protocol.hpp"
+#include <superv/defines.hpp>
+#include <superv/protocol.hpp>
 
 class Animator;
 

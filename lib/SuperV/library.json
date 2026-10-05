@@ -1,0 +1,28 @@
+{
+  "name": "SuperV",
+  "version": "0.1.0",
+  "description": "Wi-Fi remote command client and supervisor for Arduino boards",
+  "keywords": [
+    "arduino",
+    "wifi",
+    "remote-control",
+    "supervisor"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stackOverHeap/superV.git"
+  },
+  "authors": [
+    {
+      "name": "stackOverHeap"
+    }
+  ],
+  "frameworks": "arduino",
+  "platforms": "renesas-ra",
+  "dependencies": [
+    {
+      "name": "SimpleCLI",
+      "version": "^1.1.4"
+    }
+  ]
+}

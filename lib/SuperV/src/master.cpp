@@ -1,9 +1,9 @@
-#include "master.hpp"
+#include <superv/master.hpp>
 #include <WiFi.h>
 #include <SimpleCLI.h>
 
-#include "logging.hpp"
-#include "protocol.hpp"
+#include <superv/logging.hpp>
+#include <superv/protocol.hpp>
 
 static SimpleCLI cli;
 

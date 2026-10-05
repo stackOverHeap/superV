@@ -1,6 +1,6 @@
-#include "client.hpp"
-#include "logging.hpp"
-#include "protocol.hpp"
+#include <superv/client.hpp>
+#include <superv/logging.hpp>
+#include <superv/protocol.hpp>
 
 #include <stdio.h>
 
@@ -103,7 +103,7 @@ void RemoteCommandClient::begin(
     uint16_t port) {
   _serverPort = port;
 
-  WiFi.begin(ssid);
+  WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);

@@ -1,8 +1,8 @@
 #pragma once
 #include <WiFi.h>
 
-#include "defines.hpp"
-#include "animator.hpp"
+#include <superv/defines.hpp>
+#include <superv/animator.hpp>
 
 class Master
 {

@@ -1,6 +1,6 @@
-#include "animator.hpp"
-#include "logging.hpp"
-#include "protocol.hpp"
+#include <superv/animator.hpp>
+#include <superv/logging.hpp>
+#include <superv/protocol.hpp>
 
 using namespace Protocol;
 

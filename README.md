@@ -50,10 +50,13 @@ void onStart(void*) {
 void setup() {
   ClientCommandHandlers handlers;
   handlers.onStart = onStart;
+  handlers.onStop = nullptr; // callbacks are user-defined, but triggered by the master
+  handlers.onPause = nullptr;
+  handler.onReset = nullptr;
 
-  client.setIdentity("device-01", "1.0.0");
+  client.setIdentity("keyboard-friendly name");
   client.setCommandHandlers(handlers);
-  client.begin("supervisor-net", "your-wifi-password");
+  client.setup();
 }
 
 void loop() {
@@ -61,9 +64,8 @@ void loop() {
 }
 ```
 
-`begin()` joins the specified Wi-Fi network, then connects to the supervisor
-at `192.168.4.1` on port `DEFINE_SERVER_PORT` (90 by default). The password
-argument is used when joining a secured network.
+`setup()` joins the supervisor Wi-Fi network, then connects to the supervisor
+at `192.168.4.1` on port `DEFINE_SERVER_PORT` (90 by default).
 
 For a project that runs the supervisor instead, include
 `<superv/master.hpp>`, call `Master::getInstance().init()` in `setup()`, and
@@ -80,8 +82,7 @@ project and upload its default `client` environment to flash the same example:
 pio run -e client -t upload
 ```
 
-The example connects to the `supervisor-net` access point with a blank
-password, handles START/STOP/PAUSE/RESET callbacks, and blinks the built-in
+The example connects to the `supervisor-net` access point, handles START/STOP/PAUSE/RESET callbacks, and blinks the built-in
 LED at a different rate while running or paused. Update the SSID/password in
 the example if your supervisor uses different credentials.
 

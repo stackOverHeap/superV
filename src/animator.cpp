@@ -9,6 +9,8 @@ uint8_t Animator::m_AnimatorCount = 0;
 
 Animator::Animator(const WiFiClient& client) : WiFiClient(client)
 {
+    m_LastHeartbeatMS = millis();
+    m_LastAliveResponseMS = m_LastHeartbeatMS;
     m_AnimatorCount++;
     sprintf(m_Name, "Unauthentified%u", m_AnimatorCount);
     LOGI("New animator connected as %s (%u/%u)", m_Name, m_AnimatorCount, DEFINE_MAX_CLIENT);
@@ -27,7 +29,7 @@ void Animator::poll()
     // since garbage is flushed every poll). Idle + empty never times out.
     // DATA is excluded: it is a complete packet processed on the next call.
     const bool midPacket = (m_CurrentPacketStatus != PacketReceptionStatus::WAITING)
-                        && (m_CurrentPacketStatus != PacketReceptionStatus::DATA);
+        && (m_CurrentPacketStatus != PacketReceptionStatus::DATA);
     const bool incomplete = midPacket || (avail > 0);
 
     const auto sinceLastReception = now - m_LastReceptionMS;
@@ -136,6 +138,7 @@ void Animator::receive(int& avail)
             break;
 
         case ClientCommand::ALIVE:
+            m_LastAliveResponseMS = millis();
             break;
         default:
             break;
@@ -148,6 +151,24 @@ void Animator::receive(int& avail)
 bool Animator::alive()
 {
     return connected();
+}
+
+bool Animator::heartbeat()
+{
+    const uint32_t now = millis();
+    if (now - m_LastAliveResponseMS >= DEFINE_HEARTBEAT_TIMEOUT_MS)
+    {
+        LOGW("Animator %s missed its heartbeat timeout.", m_Name);
+        return false;
+    }
+
+    if (now - m_LastHeartbeatMS >= DEFINE_HEARTBEAT_INTERVAL_MS)
+    {
+        m_LastHeartbeatMS = now;
+        return sendCommand(MasterCommand::ALIVE);
+    }
+
+    return true;
 }
 
 void Animator::kill(AnimatorSeat& occupiedSeat)

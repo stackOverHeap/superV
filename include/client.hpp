@@ -49,7 +49,7 @@ private:
   void connectToMaster();
 
   WiFiClient _client;
-  IPAddress _masterAddress = IPAddress(192, 168, 10, 1);
+  IPAddress _masterAddress = IPAddress(192, 168, 4, 1);
   uint16_t _serverPort = DEFINE_SERVER_PORT;
   unsigned long _lastConnectAttemptMs = 0;
   bool _hasAttemptedConnection = false;

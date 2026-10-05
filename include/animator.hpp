@@ -28,6 +28,8 @@ class Animator : private WiFiClient
     uint32_t m_PacketBytesLeft = 0;
     int      m_LastAvail = 0;       // bytes still in the RX buffer after the previous poll
     uint32_t m_LastReceptionMS = 0;
+    uint32_t m_LastHeartbeatMS = 0;
+    uint32_t m_LastAliveResponseMS = 0;
     char m_DataBuffer[STATIC_BUFFER_SIZE] = { 0 };
 
     void receive(int& avail);
@@ -41,6 +43,7 @@ public:
 
     void poll();
     bool alive();
+    bool heartbeat();
     void kill(AnimatorSeat& occupiedSeat);
     inline uint8_t getCount() { return m_AnimatorCount; };
 

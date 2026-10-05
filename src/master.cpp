@@ -32,7 +32,6 @@ static bool emplaceFree(AnimatorSeat(&seats)[SIZE], Animator(&locations)[SIZE], 
 
 void Master::init()
 {
-    WiFi.config(arduino::IPAddress(192, 168, 10, 1));
     WiFi.beginAP("supervisor-net");
     m_Server.begin(m_ServerPort);
     LOGI("Started server on port %u", m_ServerPort);
@@ -79,7 +78,7 @@ void Master::loop()
 
         animator.poll();
 
-        if (!animator.alive()) // free seat if animator is not responding
+        if (!animator.alive() || !animator.heartbeat())
         {
             animator.kill(seat);
             continue;

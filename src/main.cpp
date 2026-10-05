@@ -94,12 +94,12 @@ void setup() {
   handlers.onReset = onReset;
   handlers.onCustom = onCustom;
 
-  client.setIdentity("s2", "1.0.0");
+  client.setIdentity("s2");
   client.setCommandHandlers(handlers);
 
   LOGI("Demonstration de l'interface client SuperV");
   LOGI("Connexion au point d'acces du superviseur...");
-  client.begin(WIFI_SSID, WIFI_PASSWORD);
+  client.setup();
 }
 
 void loop() {

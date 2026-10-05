@@ -8,7 +8,7 @@ using Protocol::ClientCommand;
 using Protocol::ClientState;
 using Protocol::MasterCommand;
 
-namespace {
+
 constexpr uint32_t MAX_PACKET_PAYLOAD = 4096;
 constexpr unsigned long PACKET_TIMEOUT_MS = 1000;
 constexpr unsigned long RECONNECT_INTERVAL_MS = 2000;
@@ -19,15 +19,17 @@ bool readExact(WiFiClient& client, uint8_t* buffer, size_t length) {
   size_t received = 0;
 
   while (received < length &&
-         millis() - start < PACKET_TIMEOUT_MS) {
+    millis() - start < PACKET_TIMEOUT_MS) {
     if (client.available() > 0) {
       const int value = client.read();
       if (value >= 0) {
         buffer[received++] = static_cast<uint8_t>(value);
       }
-    } else if (!client.connected()) {
+    }
+    else if (!client.connected()) {
       break;
-    } else {
+    }
+    else {
       delay(1);
     }
   }
@@ -35,11 +37,7 @@ bool readExact(WiFiClient& client, uint8_t* buffer, size_t length) {
   return received == length;
 }
 
-bool sendClientResponse(
-    WiFiClient& client,
-    ClientCommand command,
-    const String& payload) {
-  const uint32_t length = payload.length();
+bool sendClientResponse(WiFiClient& client, ClientCommand command, const void* payload, size_t length) {
 
   const uint8_t header[PACKET_HEADER_SIZE] = {
       static_cast<uint8_t>(PROTOCOL_SIGNATURE & 0xff),
@@ -55,55 +53,24 @@ bool sendClientResponse(
     return false;
   }
 
-  return length == 0 ||
-         client.write(
-             reinterpret_cast<const uint8_t*>(payload.c_str()),
-             length) == length;
+  return length == 0 || client.write(reinterpret_cast<const uint8_t*>(payload), length) == length;
 }
 
 String stateName(ClientState state) {
   switch (state) {
-    case ClientState::RUNNING:
-      return "RUNNING";
-    case ClientState::PAUSED:
-      return "PAUSED";
-    case ClientState::WAITING:
-    default:
-      return "WAITING";
+  case ClientState::RUNNING:
+    return "RUNNING";
+  case ClientState::PAUSED:
+    return "PAUSED";
+  case ClientState::WAITING:
+  default:
+    return "WAITING";
   }
 }
 
-String makeInfoJson(const ClientInfo& info, ClientState state) {
-  String json;
-  json.reserve(220);
-
-  json += "{\"deviceId\":\"";
-  json += info.deviceId;
-  json += "\",\"firmwareVersion\":\"";
-  json += info.firmwareVersion;
-  json += "\",\"ipAddress\":\"";
-  json += info.ipAddress;
-  json += "\",\"macAddress\":\"";
-  json += info.macAddress;
-  json += "\",\"state\":\"";
-  json += stateName(state);
-  json += "\",\"running\":";
-  json += info.running ? "true" : "false";
-  json += ",\"uptimeMs\":";
-  json += String(info.uptimeMs);
-  json += "}";
-
-  return json;
-}
-}  // namespace
-
-void RemoteCommandClient::begin(
-    const char* ssid,
-    const char* password,
-    uint16_t port) {
-  _serverPort = port;
-
-  WiFi.begin(ssid, password);
+void RemoteCommandClient::setup()
+{
+  WiFi.begin("supervisor-net");
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -112,9 +79,9 @@ void RemoteCommandClient::begin(
   LOGI("WiFi connected");
   LOGI("Client IP: %s", WiFi.localIP().toString().c_str());
   LOGI(
-      "Connecting to supervisor at %s:%u",
-      _masterAddress.toString().c_str(),
-      _serverPort);
+    "Connecting to supervisor at %s:%u",
+    _masterAddress.toString().c_str(),
+    _serverPort);
 
   connectToMaster();
 }
@@ -127,7 +94,7 @@ void RemoteCommandClient::connectToMaster() {
   const unsigned long now = millis();
 
   if (_hasAttemptedConnection &&
-      now - _lastConnectAttemptMs < RECONNECT_INTERVAL_MS) {
+    now - _lastConnectAttemptMs < RECONNECT_INTERVAL_MS) {
     return;
   }
 
@@ -138,7 +105,8 @@ void RemoteCommandClient::connectToMaster() {
 
   if (_client.connect(_masterAddress, _serverPort)) {
     LOGI("Connected to supervisor");
-  } else {
+  }
+  else {
     LOGW("Could not connect to supervisor; will retry");
   }
 }
@@ -168,19 +136,19 @@ void RemoteCommandClient::loop() {
   }
 
   const uint16_t signature =
-      static_cast<uint16_t>(header[0]) |
-      (static_cast<uint16_t>(header[1]) << 8);
+    static_cast<uint16_t>(header[0]) |
+    (static_cast<uint16_t>(header[1]) << 8);
 
   const uint8_t commandId = header[2];
 
   const uint32_t payloadLength =
-      static_cast<uint32_t>(header[3]) |
-      (static_cast<uint32_t>(header[4]) << 8) |
-      (static_cast<uint32_t>(header[5]) << 16) |
-      (static_cast<uint32_t>(header[6]) << 24);
+    static_cast<uint32_t>(header[3]) |
+    (static_cast<uint32_t>(header[4]) << 8) |
+    (static_cast<uint32_t>(header[5]) << 16) |
+    (static_cast<uint32_t>(header[6]) << 24);
 
   if (signature != PROTOCOL_SIGNATURE ||
-      payloadLength > MAX_PACKET_PAYLOAD) {
+    payloadLength > MAX_PACKET_PAYLOAD) {
     LOGW("Invalid packet signature or payload too large");
     _client.stop();
     return;
@@ -204,66 +172,65 @@ void RemoteCommandClient::loop() {
   LOGI("Command received: %u", commandId);
 
   switch (static_cast<MasterCommand>(commandId)) {
-    case MasterCommand::START:
-      startSystem();
-      break;
+  case MasterCommand::START:
+    startSystem();
+    break;
 
-    case MasterCommand::STOP:
-      stopSystem();
-      break;
+  case MasterCommand::STOP:
+    stopSystem();
+    break;
 
-    case MasterCommand::PAUSE:
-      pauseSystem();
-      break;
+  case MasterCommand::PAUSE:
+    pauseSystem();
+    break;
 
-    case MasterCommand::RESET:
-      resetSystem();
-      break;
+  case MasterCommand::RESET:
+    resetSystem();
+    break;
 
-    case MasterCommand::IDENT: {
-      // The supervisor stores the IDENT payload directly as the client name.
-      if (!sendClientResponse(_client, ClientCommand::IDENT, _deviceId)) {
-        LOGE("Failed to send IDENT response");
-        _client.stop();
-      }
-      break;
+  case MasterCommand::IDENT: {
+    // The supervisor stores the IDENT payload directly as the client name.
+    if (!sendClientResponse(_client, ClientCommand::IDENT, _deviceId.c_str(), _deviceId.length())) {
+      LOGE("Failed to send IDENT response");
+      _client.stop();
     }
+    break;
+  }
 
-    case MasterCommand::ALIVE:
-      if (!sendClientResponse(_client, ClientCommand::ALIVE, String())) {
-        LOGE("Failed to send ALIVE response");
-        _client.stop();
-      }
-      break;
-
-    case MasterCommand::STATUS: {
-      ClientInfo info = getClientInfo();
-
-      if (!sendClientResponse(
-              _client,
-              ClientCommand::STATUS,
-              makeInfoJson(info, _state))) {
-              LOGE("Failed to send STATUS response");
-        _client.stop();
-      }
-      break;
+  case MasterCommand::ALIVE:
+    if (!sendClientResponse(_client, ClientCommand::ALIVE, nullptr, 0)) {
+      LOGE("Failed to send ALIVE response");
+      _client.stop();
     }
+    break;
 
-    case MasterCommand::CUSTOM:
-      if (_handlers.onCustom != nullptr) {
-        _handlers.onCustom(
-            _handlerContext,
-            payload.c_str(),
-            payload.length());
-      } else {
-        LOGW("CUSTOM command received, but no handler is defined");
-      }
-      break;
+  case MasterCommand::STATUS: {
+    ClientInfo info = getClientInfo();
 
-    case MasterCommand::INVALID:
-    default:
-      LOGW("Unknown command: %u", commandId);
-      break;
+    if (!sendClientResponse(_client, ClientCommand::STATUS, nullptr, 0))
+    {
+      LOGE("Failed to send STATUS response");
+      _client.stop();
+    }
+    break;
+  }
+
+  case MasterCommand::CUSTOM:
+    if (_handlers.onCustom != nullptr) {
+      _handlers.onCustom(
+        _handlerContext,
+        payload.c_str(),
+        payload.length());
+    }
+    else {
+      LOGW("CUSTOM command received, but no handler is defined");
+    }
+    break;
+
+  case MasterCommand::INVALID:
+  default:
+    LOGW("Unknown command: %u", commandId);
+    break;
   }
 
   // La connexion n'est pas fermée après chaque commande :
@@ -271,20 +238,15 @@ void RemoteCommandClient::loop() {
 }
 
 void RemoteCommandClient::setCommandHandlers(
-    const ClientCommandHandlers& handlers,
-    void* context) {
+  const ClientCommandHandlers& handlers,
+  void* context) {
   _handlers = handlers;
   _handlerContext = context;
 }
 
-void RemoteCommandClient::setIdentity(
-    const char* deviceId,
-    const char* firmwareVersion) {
+void RemoteCommandClient::setIdentity(const char* deviceId) {
   if (deviceId != nullptr) {
     _deviceId = deviceId;
-  }
-  if (firmwareVersion != nullptr) {
-    _firmwareVersion = firmwareVersion;
   }
 }
 
@@ -324,7 +286,6 @@ ClientInfo RemoteCommandClient::getClientInfo() {
   ClientInfo info;
 
   info.deviceId = _deviceId;
-  info.firmwareVersion = _firmwareVersion;
   info.ipAddress = WiFi.localIP().toString();
 
   uint8_t mac[6];
@@ -332,10 +293,10 @@ ClientInfo RemoteCommandClient::getClientInfo() {
 
   char macText[18];
   snprintf(
-      macText,
-      sizeof(macText),
-      "%02x:%02x:%02x:%02x:%02x:%02x",
-      mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    macText,
+    sizeof(macText),
+    "%02x:%02x:%02x:%02x:%02x:%02x",
+    mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
   info.macAddress = macText;
   info.running = (_state == ClientState::RUNNING);

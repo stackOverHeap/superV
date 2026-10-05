@@ -9,7 +9,6 @@
 
 struct ClientInfo {
   String deviceId;
-  String firmwareVersion;
   String ipAddress;
   String macAddress;
   bool running = false;
@@ -26,17 +25,11 @@ struct ClientCommandHandlers {
 
 class RemoteCommandClient {
 public:
-  void begin(
-      const char* ssid,
-      const char* password,
-      uint16_t port = DEFINE_SERVER_PORT);
-
+  void setup();
   void loop();
 
-  void setCommandHandlers(
-      const ClientCommandHandlers& handlers,
-      void* context = nullptr);
-  void setIdentity(const char* deviceId, const char* firmwareVersion);
+  void setCommandHandlers(const ClientCommandHandlers& handlers, void* context = nullptr);
+  void setIdentity(const char* deviceId);
 
   void startSystem();
   void stopSystem();
@@ -56,7 +49,6 @@ private:
 
   Protocol::ClientState _state = Protocol::ClientState::WAITING;
   String _deviceId = "Arduino_01";
-  String _firmwareVersion = "1.0.0";
   ClientCommandHandlers _handlers;
   void* _handlerContext = nullptr;
 };

@@ -77,8 +77,6 @@ void Animator::receive(int& avail)
             m_CurrentPacketStatus = PacketReceptionStatus::SIGNATURE;
             m_PacketBytesLeft = sizeof(PacketHeader);
         }
-
-        return;
     }
 
     if (avail < m_PacketBytesLeft) // not enough bytes in the RX buffer to satisfy what is wanted
@@ -107,9 +105,10 @@ void Animator::receive(int& avail)
             m_CurrentPacketStatus = PacketReceptionStatus::DATA;
             m_PacketBytesLeft = 0;
         }
-
-        return;
     }
+
+    if (avail < m_PacketBytesLeft) // not enough bytes in the RX buffer to satisfy what is wanted
+        return;
 
     if (m_CurrentPacketStatus == PacketReceptionStatus::HEADER)
     {
@@ -118,9 +117,10 @@ void Animator::receive(int& avail)
 
         m_CurrentPacketStatus = PacketReceptionStatus::DATA;
         m_PacketBytesLeft = 0;
-
-        return;
     }
+
+    if (avail < m_PacketBytesLeft) // not enough bytes in the RX buffer to satisfy what is wanted
+        return;
 
     if (m_CurrentPacketStatus == PacketReceptionStatus::DATA)
     {
@@ -142,8 +142,6 @@ void Animator::receive(int& avail)
         }
         m_CurrentPacketStatus = PacketReceptionStatus::WAITING;
         m_PacketBytesLeft = sizeof(PacketSignature);
-
-        return;
     }
 }
 

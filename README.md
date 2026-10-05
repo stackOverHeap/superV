@@ -64,6 +64,8 @@ void loop() {
 }
 ```
 
+The `RemoteCommandClient` constructor admit an optional `realTime` boolean value, this feature can be enabled when short loop calls are needed, such as audio equipments.
+
 `setup()` joins the supervisor Wi-Fi network, then connects to the supervisor
 at `192.168.4.1` on port `DEFINE_SERVER_PORT` (90 by default).
 

@@ -71,12 +71,11 @@ String stateName(ClientState state) {
 void RemoteCommandClient::setup()
 {
   WiFi.begin("supervisor-net");
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+  int retry = 0;
+  while (WiFi.status() != WL_CONNECTED && retry < 5) {
+    delay(200);
+    retry++;
   }
-
-  LOGI("WiFi connected");
   LOGI("Client IP: %s", WiFi.localIP().toString().c_str());
   LOGI(
     "Connecting to supervisor at %s:%u",

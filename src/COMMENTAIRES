@@ -1,2 +1,0 @@
-POTENTIELS PROBLEMES :
-Problème d'initialisation : il faut faire des starts, stop, reset, et getinfo spécifiques aux cartes que l'on veut initialiser ou stopper.

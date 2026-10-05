@@ -23,7 +23,6 @@ void loop() {
 
 namespace {
 constexpr char WIFI_SSID[] = "supervisor-net";
-constexpr char WIFI_PASSWORD[] = "";
 
 enum class DemoState : uint8_t {
   WAITING,

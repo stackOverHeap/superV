@@ -16,6 +16,14 @@ struct ClientInfo {
   unsigned long uptimeMs = 0;
 };
 
+struct ClientCommandHandlers {
+  void (*onStart)(void* context) = nullptr;
+  void (*onStop)(void* context) = nullptr;
+  void (*onPause)(void* context) = nullptr;
+  void (*onReset)(void* context) = nullptr;
+  void (*onCustom)(void* context, const char* payload, size_t length) = nullptr;
+};
+
 class RemoteCommandClient {
 public:
   void begin(
@@ -25,8 +33,15 @@ public:
 
   void loop();
 
+  void setCommandHandlers(
+      const ClientCommandHandlers& handlers,
+      void* context = nullptr);
+  void setIdentity(const char* deviceId, const char* firmwareVersion);
+
   void startSystem();
   void stopSystem();
+  void pauseSystem();
+  void resetSystem();
   ClientInfo getClientInfo();
   bool isSystemRunning() const;
 
@@ -39,7 +54,9 @@ private:
   unsigned long _lastConnectAttemptMs = 0;
   bool _hasAttemptedConnection = false;
 
-  ClientState _state = ClientState::WAITING;
+  Protocol::ClientState _state = Protocol::ClientState::WAITING;
   String _deviceId = "Arduino_01";
   String _firmwareVersion = "1.0.0";
+  ClientCommandHandlers _handlers;
+  void* _handlerContext = nullptr;
 };

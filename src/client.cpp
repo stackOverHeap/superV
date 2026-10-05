@@ -1,7 +1,12 @@
 #include "client.hpp"
+#include "logging.hpp"
 #include "protocol.hpp"
 
 #include <stdio.h>
+
+using Protocol::ClientCommand;
+using Protocol::ClientState;
+using Protocol::MasterCommand;
 
 namespace {
 constexpr uint32_t MAX_PACKET_PAYLOAD = 4096;
@@ -98,21 +103,18 @@ void RemoteCommandClient::begin(
     uint16_t port) {
   _serverPort = port;
 
-  WiFi.begin(ssid, password);
+  WiFi.begin(ssid);
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.print(".");
   }
 
-  Serial.println();
-  Serial.println("WiFi connected");
-  Serial.print("Client IP: ");
-  Serial.println(WiFi.localIP());
-  Serial.print("Connecting to supervisor at ");
-  Serial.print(_masterAddress);
-  Serial.print(":");
-  Serial.println(_serverPort);
+  LOGI("WiFi connected");
+  LOGI("Client IP: %s", WiFi.localIP().toString().c_str());
+  LOGI(
+      "Connecting to supervisor at %s:%u",
+      _masterAddress.toString().c_str(),
+      _serverPort);
 
   connectToMaster();
 }
@@ -135,9 +137,9 @@ void RemoteCommandClient::connectToMaster() {
   _client.stop();
 
   if (_client.connect(_masterAddress, _serverPort)) {
-    Serial.println("Connected to supervisor");
+    LOGI("Connected to supervisor");
   } else {
-    Serial.println("Could not connect to supervisor; will retry");
+    LOGW("Could not connect to supervisor; will retry");
   }
 }
 
@@ -160,7 +162,7 @@ void RemoteCommandClient::loop() {
 
   uint8_t header[PACKET_HEADER_SIZE];
   if (!readExact(_client, header, sizeof(header))) {
-    Serial.println("Incomplete packet header");
+    LOGW("Incomplete packet header");
     _client.stop();
     return;
   }
@@ -179,7 +181,7 @@ void RemoteCommandClient::loop() {
 
   if (signature != PROTOCOL_SIGNATURE ||
       payloadLength > MAX_PACKET_PAYLOAD) {
-    Serial.println("Invalid packet signature or payload too large");
+    LOGW("Invalid packet signature or payload too large");
     _client.stop();
     return;
   }
@@ -191,7 +193,7 @@ void RemoteCommandClient::loop() {
     uint8_t byte;
 
     if (!readExact(_client, &byte, 1)) {
-      Serial.println("Incomplete packet payload");
+      LOGW("Incomplete packet payload");
       _client.stop();
       return;
     }
@@ -199,8 +201,7 @@ void RemoteCommandClient::loop() {
     payload += static_cast<char>(byte);
   }
 
-  Serial.print("Command received: ");
-  Serial.println(commandId);
+  LOGI("Command received: %u", commandId);
 
   switch (static_cast<MasterCommand>(commandId)) {
     case MasterCommand::START:
@@ -212,30 +213,28 @@ void RemoteCommandClient::loop() {
       break;
 
     case MasterCommand::PAUSE:
-      _state = ClientState::PAUSED;
-      Serial.println("System paused");
+      pauseSystem();
       break;
 
     case MasterCommand::RESET:
-      _state = ClientState::WAITING;
-      Serial.println("System reset");
+      resetSystem();
       break;
 
     case MasterCommand::IDENT: {
-      ClientInfo info = getClientInfo();
-
-      String response = "{\"deviceId\":\"";
-      response += info.deviceId;
-      response += "\",\"firmwareVersion\":\"";
-      response += info.firmwareVersion;
-      response += "\"}";
-
-      if (!sendClientResponse(_client, ClientCommand::IDENT, response)) {
-        Serial.println("Failed to send IDENT response");
+      // The supervisor stores the IDENT payload directly as the client name.
+      if (!sendClientResponse(_client, ClientCommand::IDENT, _deviceId)) {
+        LOGE("Failed to send IDENT response");
         _client.stop();
       }
       break;
     }
+
+    case MasterCommand::ALIVE:
+      if (!sendClientResponse(_client, ClientCommand::ALIVE, String())) {
+        LOGE("Failed to send ALIVE response");
+        _client.stop();
+      }
+      break;
 
     case MasterCommand::STATUS: {
       ClientInfo info = getClientInfo();
@@ -244,19 +243,26 @@ void RemoteCommandClient::loop() {
               _client,
               ClientCommand::STATUS,
               makeInfoJson(info, _state))) {
-        Serial.println("Failed to send STATUS response");
+              LOGE("Failed to send STATUS response");
         _client.stop();
       }
       break;
     }
 
     case MasterCommand::CUSTOM:
-      Serial.println("CUSTOM command received, but no handler is defined");
+      if (_handlers.onCustom != nullptr) {
+        _handlers.onCustom(
+            _handlerContext,
+            payload.c_str(),
+            payload.length());
+      } else {
+        LOGW("CUSTOM command received, but no handler is defined");
+      }
       break;
 
     case MasterCommand::INVALID:
     default:
-      Serial.println("Unknown command");
+      LOGW("Unknown command: %u", commandId);
       break;
   }
 
@@ -264,14 +270,54 @@ void RemoteCommandClient::loop() {
   // elle reste disponible pour les échanges suivants.
 }
 
+void RemoteCommandClient::setCommandHandlers(
+    const ClientCommandHandlers& handlers,
+    void* context) {
+  _handlers = handlers;
+  _handlerContext = context;
+}
+
+void RemoteCommandClient::setIdentity(
+    const char* deviceId,
+    const char* firmwareVersion) {
+  if (deviceId != nullptr) {
+    _deviceId = deviceId;
+  }
+  if (firmwareVersion != nullptr) {
+    _firmwareVersion = firmwareVersion;
+  }
+}
+
 void RemoteCommandClient::startSystem() {
   _state = ClientState::RUNNING;
-  Serial.println("System started");
+  if (_handlers.onStart != nullptr) {
+    _handlers.onStart(_handlerContext);
+  }
+  LOGI("System started");
 }
 
 void RemoteCommandClient::stopSystem() {
   _state = ClientState::WAITING;
-  Serial.println("System stopped");
+  if (_handlers.onStop != nullptr) {
+    _handlers.onStop(_handlerContext);
+  }
+  LOGI("System stopped");
+}
+
+void RemoteCommandClient::pauseSystem() {
+  _state = ClientState::PAUSED;
+  if (_handlers.onPause != nullptr) {
+    _handlers.onPause(_handlerContext);
+  }
+  LOGI("System paused");
+}
+
+void RemoteCommandClient::resetSystem() {
+  _state = ClientState::WAITING;
+  if (_handlers.onReset != nullptr) {
+    _handlers.onReset(_handlerContext);
+  }
+  LOGI("System reset");
 }
 
 ClientInfo RemoteCommandClient::getClientInfo() {

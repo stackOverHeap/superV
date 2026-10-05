@@ -94,7 +94,7 @@ void setup() {
   handlers.onReset = onReset;
   handlers.onCustom = onCustom;
 
-  client.setIdentity("superV-test", "1.0.0");
+  client.setIdentity("s2", "1.0.0");
   client.setCommandHandlers(handlers);
 
   LOGI("Demonstration de l'interface client SuperV");

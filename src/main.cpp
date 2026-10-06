@@ -18,8 +18,8 @@ void setup() {
 }
 
 void loop() {
-  master.loop();
   interface.loop(master);
+  master.loop();
 }
 
 #elif defined(CLIENT_MODE)

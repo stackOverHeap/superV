@@ -28,8 +28,7 @@ private:
 
 	Adafruit_ST7735 _display;
 	ButtonState _buttons[4];
-	uint8_t _encoderState = 0;
-	int8_t _encoderSteps = 0;
+	int32_t _encoderSteps = 0;
 	uint8_t _selectedCommand = 0;
 	const char* _feedback = nullptr;
 	uint16_t _feedbackColor = 0;

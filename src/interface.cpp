@@ -5,10 +5,10 @@
 
 namespace {
 constexpr uint8_t TFT_CS_PIN = 10;
-constexpr uint8_t TFT_DC_PIN = 9;
-constexpr uint8_t TFT_RESET_PIN = 8;
+constexpr uint8_t TFT_DC_PIN = 8;
+constexpr uint8_t TFT_RESET_PIN = 9;
 constexpr uint8_t TFT_BACKLIGHT_PIN = 7;
-constexpr uint8_t TFT_SD_CS_PIN = 6;
+constexpr uint8_t TFT_SD_CS_PIN = 4;
 
 constexpr uint8_t ENCODER_A_PIN = 2;
 constexpr uint8_t ENCODER_B_PIN = 3;
@@ -37,6 +37,18 @@ constexpr int8_t ENCODER_TRANSITIONS[16] = {
 		-1, 0, 0, 1,
 		0, 1, -1, 0,
 };
+
+volatile uint8_t encoderState = 0;
+volatile int32_t encoderTransitionsPending = 0;
+
+void handleEncoderChange() {
+	const uint8_t state =
+			(static_cast<uint8_t>(digitalRead(ENCODER_A_PIN)) << 1) |
+			static_cast<uint8_t>(digitalRead(ENCODER_B_PIN));
+	const uint8_t transition = (encoderState << 2) | state;
+	encoderTransitionsPending += ENCODER_TRANSITIONS[transition];
+	encoderState = state;
+}
 }  // namespace
 
 Interface::Interface()
@@ -55,9 +67,17 @@ void Interface::begin() {
 	pinMode(TFT_SD_CS_PIN, OUTPUT);
 	digitalWrite(TFT_SD_CS_PIN, HIGH);
 
-	_encoderState =
+	encoderState =
 			(static_cast<uint8_t>(digitalRead(ENCODER_A_PIN)) << 1) |
 			static_cast<uint8_t>(digitalRead(ENCODER_B_PIN));
+	attachInterrupt(
+			digitalPinToInterrupt(ENCODER_A_PIN),
+			handleEncoderChange,
+			CHANGE);
+	attachInterrupt(
+			digitalPinToInterrupt(ENCODER_B_PIN),
+			handleEncoderChange,
+			CHANGE);
 
 	_display.initR(INITR_BLACKTAB);
 	_display.setRotation(0);
@@ -78,25 +98,26 @@ void Interface::loop(Master& master) {
 }
 
 void Interface::readEncoder() {
-	const uint8_t state =
-			(static_cast<uint8_t>(digitalRead(ENCODER_A_PIN)) << 1) |
-			static_cast<uint8_t>(digitalRead(ENCODER_B_PIN));
-	const uint8_t transition = (_encoderState << 2) | state;
-	_encoderSteps += ENCODER_TRANSITIONS[transition];
-	_encoderState = state;
+	noInterrupts();
+	const int32_t transitions = encoderTransitionsPending;
+	encoderTransitionsPending = 0;
+	interrupts();
 
-	if (_encoderSteps >= 4) {
-		_selectedCommand = (_selectedCommand + 1) % COMMAND_COUNT;
-		_encoderSteps = 0;
-		_feedback = nullptr;
-		draw();
-	} else if (_encoderSteps <= -4) {
-		_selectedCommand =
-				(_selectedCommand + COMMAND_COUNT - 1) % COMMAND_COUNT;
-		_encoderSteps = 0;
-		_feedback = nullptr;
-		draw();
+	_encoderSteps += transitions;
+	const int32_t detents = _encoderSteps / 4;
+	_encoderSteps %= 4;
+	if (detents == 0) {
+		return;
 	}
+
+	const int32_t commandOffset =
+			((detents % COMMAND_COUNT) + COMMAND_COUNT) % COMMAND_COUNT;
+	_selectedCommand =
+			(_selectedCommand + commandOffset) % COMMAND_COUNT;
+	_feedback = nullptr;
+	Serial.print("Encoder detent, command ");
+	Serial.println(_selectedCommand + 1);
+	draw();
 }
 
 void Interface::readButtons(Master& master) {

@@ -25,10 +25,13 @@ struct ClientCommandHandlers {
 
 class RemoteCommandClient {
 public:
+  RemoteCommandClient() = default;
+  RemoteCommandClient(bool realTimeNeed);
   void setup();
   void loop();
 
   void setCommandHandlers(const ClientCommandHandlers& handlers, void* context = nullptr);
+  void setRealTimeNeed(bool realTimeNeed);
   void setIdentity(const char* deviceId);
 
   void startSystem();
@@ -39,13 +42,27 @@ public:
   bool isSystemRunning() const;
 
 private:
-  void connectToMaster();
+  void connectToMaster(bool connectionKnownLost = false);
+
+  void normalLoop();
+  void realTimeLoop();
+  void resetReceiveState();
 
   WiFiClient _client;
   IPAddress _masterAddress = IPAddress(192, 168, 4, 1);
   uint16_t _serverPort = DEFINE_SERVER_PORT;
   unsigned long _lastConnectAttemptMs = 0;
+  unsigned long _lastRealtimePollMs = 0;
+  unsigned long _lastRealtimeWifiCheckMs = 0;
+  unsigned long _lastRealtimeReconnectCheckMs = 0;
+  unsigned long _receiveStartedMs = 0;
   bool _hasAttemptedConnection = false;
+  bool m_realTime = false;
+  uint8_t m_receiveHeader[7] = {};
+  uint8_t m_receiveHeaderBytes = 0;
+  uint8_t m_receiveCommand = 0;
+  uint32_t m_receivePayloadLength = 0;
+  String m_receivePayload;
 
   Protocol::ClientState _state = Protocol::ClientState::WAITING;
   String _deviceId = "Arduino_01";

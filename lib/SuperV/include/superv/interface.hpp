@@ -23,18 +23,13 @@ private:
 
 	void readEncoder();
 	void readButtons(Master& master);
-	void refreshPeerLabels(Master& master);
+	void updatePeerNames(Master& master);
 	void sendSelectedCommand(Master& master, uint8_t peerIndex);
 	void draw();
 
 	Adafruit_ST7735 _display;
 	ButtonState _buttons[4];
-	char _peerLabels[4][9] = {
-			"P1 ANIM1",
-			"P2 ANIM2",
-			"P3 ANIM3",
-			"P4 ANIM4",
-	};
+	char _peerNames[4][64] = {};
 	int32_t _encoderSteps = 0;
 	uint8_t _selectedCommand = 0;
 	const char* _feedback = nullptr;

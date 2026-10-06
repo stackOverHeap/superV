@@ -1,6 +1,7 @@
 #include <superv/animator.hpp>
 #include <superv/logging.hpp>
 #include <superv/protocol.hpp>
+#include <string.h>
 
 using namespace Protocol;
 
@@ -12,8 +13,6 @@ Animator::Animator(const WiFiClient& client) : WiFiClient(client)
     m_LastHeartbeatMS = millis();
     m_LastAliveResponseMS = m_LastHeartbeatMS;
     m_AnimatorCount++;
-    sprintf(m_Name, "Unauthentified%u", m_AnimatorCount);
-    LOGI("New animator connected as %s (%u/%u)", m_Name, m_AnimatorCount, DEFINE_MAX_CLIENT);
     sendCommand(MasterCommand::IDENT);
 }
 
@@ -131,10 +130,14 @@ void Animator::receive(int& avail)
         switch (m_CurrentPacket.clientCommandID)
         {
         case ClientCommand::IDENT:
-            if (m_CurrentPacket.followingLength == 0)
-                break;
-            memset(m_Name, 0, sizeof(m_Name));
-            strncpy(m_Name, m_DataBuffer, sizeof(m_Name) - 1);
+            if (m_CurrentPacket.followingLength > 0)
+            {
+                const size_t nameLength =
+                    min(static_cast<size_t>(m_CurrentPacket.followingLength),
+                        sizeof(m_Name) - 1);
+                memcpy(m_Name, m_DataBuffer, nameLength);
+                m_Name[nameLength] = '\0';
+            }
             break;
 
         case ClientCommand::ALIVE:
@@ -191,17 +194,13 @@ bool Animator::sendCommand(MasterCommand command)
     return true;
 }
 
-char* Animator::getName()
+const char* Animator::getName() const
 {
     return m_Name;
 }
 
-bool Animator::isSameConnection(const WiFiClient& client)
+void Animator::setName(const char* nameString)
 {
-    return WiFiClient::operator==(client);
-}
-
-void Animator::setName(char* nameString)
-{
-    strncpy(m_Name, nameString, sizeof(m_Name));
+    strncpy(m_Name, nameString, sizeof(m_Name) - 1);
+    m_Name[sizeof(m_Name) - 1] = '\0';
 }

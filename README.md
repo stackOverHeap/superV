@@ -73,6 +73,9 @@ For a project that runs the supervisor instead, include
 `<superv/master.hpp>`, call `Master::getInstance().init()` in `setup()`, and
 call its `loop()` method from the Arduino `loop()`. The master creates the
 `supervisor-net` access point and provides its command interface over Serial.
+The supervisor screen displays each connected client's identity in its button
+slot (for example, `citrouille`). Until the client sends its identity, the slot
+shows a fallback name such as `anim1`; disconnected slots can be reused.
 
 ## Included LED example
 

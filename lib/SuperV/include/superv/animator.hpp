@@ -48,9 +48,8 @@ public:
     inline uint8_t getCount() { return m_AnimatorCount; };
 
     bool sendCommand(Protocol::MasterCommand command);
-    char* getName();
-    bool isSameConnection(const WiFiClient& client);
+    const char* getName() const;
 
-    void setName(char* nameString);
+    void setName(const char* nameString);
     bool addCustom(char* commandString, int len);
 };

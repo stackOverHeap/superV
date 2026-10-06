@@ -2,7 +2,6 @@
 
 #include <superv/logging.hpp>
 #include <superv/master.hpp>
-
 #include <stdio.h>
 #include <string.h>
 
@@ -23,7 +22,7 @@ struct CommandOption {
 	Protocol::MasterCommand command;
 };
 
-static constexpr CommandOption commandText[] = {
+constexpr CommandOption commandText[] = {
 		{"IDENT", Protocol::MasterCommand::IDENT},
 		{"STATUS", Protocol::MasterCommand::STATUS},
 		{"ALIVE", Protocol::MasterCommand::ALIVE},
@@ -90,9 +89,9 @@ void Interface::begin() {
 }
 
 void Interface::loop(Master& master) {
+	updatePeerNames(master);
 	readEncoder();
 	readButtons(master);
-	refreshPeerLabels(master);
 
 	if (_feedback != nullptr &&
 			static_cast<long>(millis() - _feedbackUntilMs) >= 0) {
@@ -101,31 +100,17 @@ void Interface::loop(Master& master) {
 	}
 }
 
-void Interface::refreshPeerLabels(Master& master) {
+void Interface::updatePeerNames(Master& master) {
 	bool changed = false;
-
 	for (uint8_t index = 0; index < 4; ++index) {
-		char peerName[STATIC_BUFFER_SIZE];
-		char label[sizeof(_peerLabels[index])];
-		if (master.getPeerName(index, peerName, sizeof(peerName))) {
-			snprintf(
-					label,
-					sizeof(label),
-					"P%u %.5s",
-					static_cast<unsigned int>(index + 1),
-					peerName);
-		} else {
-			snprintf(
-					label,
-					sizeof(label),
-					"P%u ANIM%u",
-					static_cast<unsigned int>(index + 1),
-					static_cast<unsigned int>(index + 1));
+		char name[sizeof(_peerNames[index])];
+		if (!master.getPeerName(index, name, sizeof(name))) {
+			snprintf(name, sizeof(name), "anim%u", index + 1);
 		}
 
-		if (strcmp(_peerLabels[index], label) != 0) {
-			strncpy(_peerLabels[index], label, sizeof(_peerLabels[index]) - 1);
-			_peerLabels[index][sizeof(_peerLabels[index]) - 1] = '\0';
+		if (strncmp(_peerNames[index], name, sizeof(_peerNames[index])) != 0) {
+			strncpy(_peerNames[index], name, sizeof(_peerNames[index]) - 1);
+			_peerNames[index][sizeof(_peerNames[index]) - 1] = '\0';
 			changed = true;
 		}
 	}
@@ -153,9 +138,9 @@ void Interface::readEncoder() {
 	_selectedCommand =
 			(_selectedCommand + commandOffset) % COMMAND_COUNT;
 	_feedback = nullptr;
+	draw();
 	Serial.print("Encoder detent, command ");
 	Serial.println(_selectedCommand + 1);
-	draw();
 }
 
 void Interface::readButtons(Master& master) {
@@ -174,9 +159,6 @@ void Interface::readButtons(Master& master) {
 				button.stablePressed != button.rawPressed) {
 			button.stablePressed = button.rawPressed;
 			if (button.stablePressed) {
-				Serial.print("Button P");
-				Serial.print(index + 1);
-				Serial.println(" pressed");
 				sendSelectedCommand(master, index);
 			}
 		}
@@ -244,13 +226,22 @@ void Interface::draw() {
 	_display.print("BOUTON = ENVOI PEER");
 
 	for (uint8_t index = 0; index < 4; ++index) {
-		const int16_t x = 4 + (index % 2) * 62;
+		const int16_t x = 1 + (index % 2) * 64;
 		const int16_t y = 101 + (index / 2) * 23;
-		_display.drawRoundRect(x, y, 58, 19, 4, ST77XX_CYAN);
+		_display.drawRoundRect(x, y, 62, 19, 4, ST77XX_CYAN);
 		_display.setTextColor(ST77XX_WHITE);
 		_display.setTextSize(1);
-		_display.setCursor(x + 7, y + 6);
-		_display.print(_peerLabels[index]);
+		char visibleName[11];
+		strncpy(visibleName, _peerNames[index], sizeof(visibleName) - 1);
+		visibleName[sizeof(visibleName) - 1] = '\0';
+		int16_t nameX = 0;
+		int16_t nameY = 0;
+		uint16_t nameWidth = 0;
+		uint16_t nameHeight = 0;
+		_display.getTextBounds(
+				visibleName, 0, 0, &nameX, &nameY, &nameWidth, &nameHeight);
+		_display.setCursor(x + (62 - nameWidth) / 2, y + 6);
+		_display.print(visibleName);
 	}
 
 	if (_feedback != nullptr) {

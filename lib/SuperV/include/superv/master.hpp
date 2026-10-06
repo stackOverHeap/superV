@@ -1,5 +1,4 @@
 #pragma once
-#include <stddef.h>
 #include <WiFi.h>
 
 #include <superv/defines.hpp>

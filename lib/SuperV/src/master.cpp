@@ -4,6 +4,7 @@
 
 #include <superv/logging.hpp>
 #include <superv/protocol.hpp>
+#include <stdio.h>
 
 static SimpleCLI cli;
 
@@ -22,12 +23,32 @@ static bool emplaceFree(AnimatorSeat(&seats)[SIZE], Animator(&locations)[SIZE], 
         if (seats[i] == nullptr) // free seat, claim it
         {
             locations[i] = Animator(client); // copy to location
+            char name[STATIC_BUFFER_SIZE];
+            snprintf(name, sizeof(name), "anim%d", i + 1);
+            locations[i].setName(name);
             seats[i] = &locations[i];
+            LOGI("New animator connected as %s (%u/%u)",
+                 locations[i].getName(), locations[i].getCount(),
+                 DEFINE_MAX_CLIENT);
             return true;
         }
     }
 
     return false;
+}
+
+bool Master::getPeerName(uint8_t peerIndex, char* name, size_t nameSize) const
+{
+    if (name == nullptr || nameSize == 0)
+        return false;
+
+    name[0] = '\0';
+    if (peerIndex >= DEFINE_MAX_CLIENT || m_Seats[peerIndex] == nullptr ||
+        !m_Seats[peerIndex]->alive())
+        return false;
+
+    snprintf(name, nameSize, "%s", m_Seats[peerIndex]->getName());
+    return true;
 }
 
 void Master::init()
@@ -46,7 +67,6 @@ void Master::init()
     addPeerCommand("reset", "Reset the peer.");
     cli.addCommand("peers").setDescription("List connected peers.");
     cli.addCommand("help").setDescription("Show available commands.");
-
     m_Interface.begin();
 }
 
@@ -65,43 +85,15 @@ bool Master::sendCommandToPeer(uint8_t peerIndex, Protocol::MasterCommand comman
     return animator.alive() && animator.sendCommand(command);
 }
 
-bool Master::getPeerName(uint8_t peerIndex, char* name, size_t nameSize) const
-{
-    if (name == nullptr || nameSize == 0)
-        return false;
-
-    name[0] = '\0';
-    if (peerIndex >= DEFINE_MAX_CLIENT || m_Seats[peerIndex] == nullptr)
-        return false;
-
-    const char* peerName = m_Seats[peerIndex]->getName();
-    if (peerName[0] == '\0' || strncmp(peerName, "Unauthentified", 14) == 0)
-        return false;
-
-    strncpy(name, peerName, nameSize - 1);
-    name[nameSize - 1] = '\0';
-    return true;
-}
-
 void Master::loop()
 {
     m_Interface.loop(*this);
 
-    WiFiClient client = m_Server.available();
+    WiFiClient client = m_Server.accept();
 
     if (client)
     {
-        bool alreadyRegistered = false;
-        for (AnimatorSeat seat : m_Seats)
-        {
-            if (seat != nullptr && seat->isSameConnection(client))
-            {
-                alreadyRegistered = true;
-                break;
-            }
-        }
-
-        if (!alreadyRegistered && !emplaceFree(m_Seats, m_Animators, client))
+        if (!emplaceFree(m_Seats, m_Animators, client))
         {
             client.println("ERROR : Too many client connected.");
             client.stop();
@@ -127,38 +119,11 @@ void Master::loop()
 
     }
 
-    static char serialInput[64];
-    static size_t serialInputLength = 0;
-    static bool serialInputOverflow = false;
-
-    while (Serial.available() > 0)
+    if (Serial.available())
     {
-        const char value = static_cast<char>(Serial.read());
-
-        if (value == '\r')
-            continue;
-
-        if (value == '\n')
-        {
-            if (serialInputOverflow)
-            {
-                Serial.println("Serial command too long; discarded.");
-            }
-            else if (serialInputLength > 0)
-            {
-                serialInput[serialInputLength] = '\0';
-                cli.parse(serialInput);
-            }
-
-            serialInputLength = 0;
-            serialInputOverflow = false;
-            continue;
-        }
-
-        if (serialInputLength < sizeof(serialInput) - 1)
-            serialInput[serialInputLength++] = value;
-        else
-            serialInputOverflow = true;
+        String input = Serial.readStringUntil('\n');
+        if (input.length() > 0)
+            cli.parse(input);
     }
 
     while (cli.available())

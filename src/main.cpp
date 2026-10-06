@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <superv/logging.hpp>
-#include "benchmark.hpp"
 
 #if defined(MASTER_MODE) && defined(CLIENT_MODE)
 #error "Select exactly one build mode: MASTER_MODE or CLIENT_MODE"
@@ -23,66 +22,66 @@ void loop() {
 #include <superv/client.hpp>
 
 namespace {
-  constexpr char WIFI_SSID[] = "supervisor-net";
+constexpr char WIFI_SSID[] = "supervisor-net";
+constexpr char WIFI_PASSWORD[] = "";
 
-  enum class DemoState : uint8_t {
-    WAITING,
-    RUNNING,
-    PAUSED
-  };
+enum class DemoState : uint8_t {
+  WAITING,
+  RUNNING,
+  PAUSED
+};
 
-  RemoteCommandClient client(true);
-  DemoState demoState = DemoState::WAITING;
-  unsigned long lastLedToggleMs = 0;
-  bool ledOn = false;
-  uint32_t resetCount = 0;
+RemoteCommandClient client;
+DemoState demoState = DemoState::WAITING;
+unsigned long lastLedToggleMs = 0;
+bool ledOn = false;
+uint32_t resetCount = 0;
 
-  void onStart(void*) {
-    demoState = DemoState::RUNNING;
-    LOGI("[APP] START applique: le programme de demonstration tourne.");
+void onStart(void*) {
+  demoState = DemoState::RUNNING;
+  LOGI("[APP] START applique: le programme de demonstration tourne.");
+}
+
+void onStop(void*) {
+  demoState = DemoState::WAITING;
+  LOGI("[APP] STOP applique: le programme de demonstration est arrete.");
+}
+
+void onPause(void*) {
+  demoState = DemoState::PAUSED;
+  LOGI("[APP] PAUSE applique: le programme de demonstration est en pause.");
+}
+
+void onReset(void*) {
+  demoState = DemoState::WAITING;
+  resetCount++;
+  LOGI("[APP] RESET applique. Nombre de resets: %lu", resetCount);
+}
+
+void onCustom(void*, const char* payload, size_t length) {
+  LOGI("[APP] CUSTOM recu: %.*s", static_cast<int>(length), payload);
+}
+
+void updateDemoLed() {
+  if (demoState == DemoState::WAITING) {
+    ledOn = false;
+    digitalWrite(LED_BUILTIN, LOW);
+    return;
   }
 
-  void onStop(void*) {
-    demoState = DemoState::WAITING;
-    LOGI("[APP] STOP applique: le programme de demonstration est arrete.");
-  }
-
-  void onPause(void*) {
-    demoState = DemoState::PAUSED;
-    LOGI("[APP] PAUSE applique: le programme de demonstration est en pause.");
-  }
-
-  void onReset(void*) {
-    demoState = DemoState::WAITING;
-    resetCount++;
-    LOGI("[APP] RESET applique. Nombre de resets: %lu", resetCount);
-  }
-
-  void onCustom(void*, const char* payload, size_t length) {
-    LOGI("[APP] CUSTOM recu: %.*s", static_cast<int>(length), payload);
-  }
-
-  void updateDemoLed() {
-    if (demoState == DemoState::WAITING) {
-      ledOn = false;
-      digitalWrite(LED_BUILTIN, LOW);
-      return;
-    }
-
-    const unsigned long intervalMs =
+  const unsigned long intervalMs =
       demoState == DemoState::RUNNING ? 250 : 1000;
-    const unsigned long now = millis();
+  const unsigned long now = millis();
 
-    if (now - lastLedToggleMs >= intervalMs) {
-      lastLedToggleMs = now;
-      ledOn = !ledOn;
-      digitalWrite(LED_BUILTIN, ledOn ? HIGH : LOW);
-    }
+  if (now - lastLedToggleMs >= intervalMs) {
+    lastLedToggleMs = now;
+    ledOn = !ledOn;
+    digitalWrite(LED_BUILTIN, ledOn ? HIGH : LOW);
   }
+}
 }  // namespace
 
 void setup() {
-  auto bench = Chrono("setup()");
   Serial.begin(9600);
 
   pinMode(LED_BUILTIN, OUTPUT);
@@ -103,21 +102,9 @@ void setup() {
   client.setup();
 }
 
-
 void loop() {
-  uint32_t time = 0;
-  int cycles = 0;
-
-  while (cycles < 100)
-  {
-    auto bench = Chrono("loop()", time, true);
-    client.loop();
-    updateDemoLed();
-    cycles++;
-  }
-  LOGI("avg loop time is %u us on 100 cycles", time);
-  cycles = 0;
-
+  client.loop();
+  updateDemoLed();
 }
 
 #else

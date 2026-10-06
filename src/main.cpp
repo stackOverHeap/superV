@@ -31,7 +31,7 @@ namespace {
     PAUSED
   };
 
-  RemoteCommandClient client(true);
+  RemoteCommandClient client;
   DemoState demoState = DemoState::WAITING;
   unsigned long lastLedToggleMs = 0;
   bool ledOn = false;
@@ -97,10 +97,10 @@ void setup() {
 
   client.setIdentity("s2");
   client.setCommandHandlers(handlers);
-
-  LOGI("Demonstration de l'interface client SuperV");
-  LOGI("Connexion au point d'acces du superviseur...");
   client.setup();
+  client.loop();
+  client.createCustom("testcmd");
+
 }
 
 
@@ -115,7 +115,7 @@ void loop() {
     updateDemoLed();
     cycles++;
   }
-  LOGI("avg loop time is %u us on 100 cycles", time);
+  //LOGI("avg loop time is %u us on 100 cycles", time);
   cycles = 0;
 
 }

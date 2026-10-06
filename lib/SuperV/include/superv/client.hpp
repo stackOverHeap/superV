@@ -6,40 +6,36 @@
 
 #include <superv/defines.hpp>
 #include <superv/protocol.hpp>
-
-struct ClientInfo {
-  String deviceId;
-  String ipAddress;
-  String macAddress;
-  bool running = false;
-  unsigned long uptimeMs = 0;
-};
+#include <superv/animator.hpp>
 
 struct ClientCommandHandlers {
-  void (*onStart)(void* context) = nullptr;
-  void (*onStop)(void* context) = nullptr;
-  void (*onPause)(void* context) = nullptr;
-  void (*onReset)(void* context) = nullptr;
-  void (*onCustom)(void* context, const char* payload, size_t length) = nullptr;
+  void (*onStart)(void) = nullptr;
+  void (*onStop)(void) = nullptr;
+  void (*onPause)(void) = nullptr;
+  void (*onReset)(void) = nullptr;
+  void (*onCustom)(void) = nullptr;
 };
 
-class RemoteCommandClient {
+class RemoteCommandClient : public Animator{
 public:
   RemoteCommandClient() = default;
   RemoteCommandClient(bool realTimeNeed);
-  void setup();
-  void loop();
 
-  void setCommandHandlers(const ClientCommandHandlers& handlers, void* context = nullptr);
+  void setup();
+  void loop() override;
+
+  void handleCommand(Protocol::Command command) override;
+
+  void setCommandHandlers(const ClientCommandHandlers& handlers);
   void setRealTimeNeed(bool realTimeNeed);
-  void setIdentity(const char* deviceId);
-  void createCustom(const char * commandName);
+
+  /*legacy alias*/ void setIdentity(const char* deviceId);
 
   void startSystem();
   void stopSystem();
   void pauseSystem();
   void resetSystem();
-  ClientInfo getClientInfo();
+
   bool isSystemRunning() const;
 
 private:
@@ -49,25 +45,27 @@ private:
   void realTimeLoop();
   void resetReceiveState();
 
-  WiFiClient _client;
-  IPAddress _masterAddress = IPAddress(192, 168, 4, 1);
-  uint16_t _serverPort = DEFINE_SERVER_PORT;
+  const IPAddress m_masterAdress = IPAddress(192, 168, 4, 1);
+  const uint16_t m_masterPort = DEFINE_SERVER_PORT;
+
+  ClientCommandHandlers m_handlers;
+
+
   unsigned long _lastConnectAttemptMs = 0;
   unsigned long _lastRealtimePollMs = 0;
   unsigned long _lastRealtimeWifiCheckMs = 0;
   unsigned long _lastRealtimeReconnectCheckMs = 0;
   unsigned long _receiveStartedMs = 0;
+
   bool _hasAttemptedConnection = false;
   bool m_realTime = false;
   uint8_t m_receiveHeader[7] = {};
   uint8_t m_receiveHeaderBytes = 0;
   uint8_t m_receiveCommand = 0;
   uint32_t m_receivePayloadLength = 0;
-  String m_receivePayload;
 
   Protocol::ClientState _state = Protocol::ClientState::WAITING;
   String _deviceId = "Arduino_01";
-  ClientCommandHandlers _handlers;
   Protocol::CustomCommand m_customCommands[DEFINE_CLIENT_CUSTOM_MAX];
   uint8_t m_customCommandCount = 0;
   void* _handlerContext = nullptr;

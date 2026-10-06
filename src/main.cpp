@@ -37,29 +37,29 @@ namespace {
   bool ledOn = false;
   uint32_t resetCount = 0;
 
-  void onStart(void*) {
+  void onStart(void) {
     demoState = DemoState::RUNNING;
     LOGI("[APP] START applique: le programme de demonstration tourne.");
   }
 
-  void onStop(void*) {
+  void onStop(void) {
     demoState = DemoState::WAITING;
     LOGI("[APP] STOP applique: le programme de demonstration est arrete.");
   }
 
-  void onPause(void*) {
+  void onPause(void) {
     demoState = DemoState::PAUSED;
     LOGI("[APP] PAUSE applique: le programme de demonstration est en pause.");
   }
 
-  void onReset(void*) {
+  void onReset(void) {
     demoState = DemoState::WAITING;
     resetCount++;
     LOGI("[APP] RESET applique. Nombre de resets: %lu", resetCount);
   }
 
-  void onCustom(void*, const char* payload, size_t length) {
-    LOGI("[APP] CUSTOM recu: %.*s", static_cast<int>(length), payload);
+  void onCustom(void) {
+    LOGI("[APP] CUSTOM");
   }
 
   void updateDemoLed() {
@@ -95,12 +95,9 @@ void setup() {
   handlers.onReset = onReset;
   handlers.onCustom = onCustom;
 
-  client.setIdentity("s2");
+  client.setIdentity("test");
   client.setCommandHandlers(handlers);
   client.setup();
-  client.loop();
-  client.createCustom("testcmd");
-
 }
 
 
@@ -108,14 +105,14 @@ void loop() {
   uint32_t time = 0;
   int cycles = 0;
 
-  while (cycles < 100)
+  while (cycles < 1000)
   {
     auto bench = Chrono("loop()", time, true);
     client.loop();
     updateDemoLed();
     cycles++;
   }
-  //LOGI("avg loop time is %u us on 100 cycles", time);
+  LOGI("avg loop time is %u us on 1000 cycles", time);
   cycles = 0;
 
 }

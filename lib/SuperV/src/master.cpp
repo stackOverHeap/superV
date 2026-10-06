@@ -176,23 +176,23 @@ void Master::loop()
             continue;
         }
 
-        Protocol::MasterCommand protocolCommand;
+        Protocol::Command protocolCommand;
         if (commandName == "ident")
-            protocolCommand = Protocol::MasterCommand::IDENT;
+            protocolCommand = Protocol::Command::IDENT;
         else if (commandName == "status")
-            protocolCommand = Protocol::MasterCommand::STATUS;
+            protocolCommand = Protocol::Command::STATUS;
         else if (commandName == "alive")
-            protocolCommand = Protocol::MasterCommand::ALIVE;
+            protocolCommand = Protocol::Command::ALIVE;
         else if (commandName == "custom")
-            protocolCommand = Protocol::MasterCommand::CUSTOM;
+            protocolCommand = Protocol::Command::CUSTOM;
         else if (commandName == "start")
-            protocolCommand = Protocol::MasterCommand::START;
+            protocolCommand = Protocol::Command::START;
         else if (commandName == "stop")
-            protocolCommand = Protocol::MasterCommand::STOP;
+            protocolCommand = Protocol::Command::STOP;
         else if (commandName == "pause")
-            protocolCommand = Protocol::MasterCommand::PAUSE;
+            protocolCommand = Protocol::Command::PAUSE;
         else if (commandName == "reset")
-            protocolCommand = Protocol::MasterCommand::RESET;
+            protocolCommand = Protocol::Command::RESET;
         else
         {
             Serial.print("Unknown command: ");

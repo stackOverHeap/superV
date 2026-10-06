@@ -18,8 +18,9 @@ enum class PacketReceptionStatus
     TIMEDOUT
 };
 
-class Animator : private WiFiClient
+class Animator : protected WiFiClient
 {
+protected:
     static uint8_t m_AnimatorCount;
     char m_Name[STATIC_BUFFER_SIZE] = { 0 };
 
@@ -32,7 +33,9 @@ class Animator : private WiFiClient
     uint32_t m_LastAliveResponseMS = 0;
     char m_DataBuffer[STATIC_BUFFER_SIZE] = { 0 };
 
-    void receive(int& avail);
+    void receiveCommand(int& avail);
+    bool createCustom(Protocol::CustomCommand& command);
+    virtual void handleCommand(Protocol::Command command);
 
     Protocol::CustomCommand m_customCommands[DEFINE_CLIENT_CUSTOM_MAX];
     uint8_t m_customCommandCount = 0;
@@ -42,17 +45,18 @@ public:
     Animator(const WiFiClient& client);
     ~Animator() = default;
 
+    virtual void loop();
     void poll();
     bool alive();
     bool heartbeat();
     void kill(AnimatorSeat& occupiedSeat);
     inline uint8_t getCount() { return m_AnimatorCount; };
 
-    bool sendCommand(Protocol::MasterCommand command);
-    bool createCustom(Protocol::CustomCommand& command);
+    bool sendCommand(Protocol::Command command, const void* payload = nullptr, size_t length = 0);
+
     char* getName();
 
-    void setName(char* nameString);
+    void setName(const char* nameString);
     bool addCustom(char* commandString, int len);
     Protocol::CustomCommand getCustom(uint8_t index);
     uint8_t getCustomCount();

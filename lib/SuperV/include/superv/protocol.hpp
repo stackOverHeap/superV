@@ -12,7 +12,7 @@ extern char* COMMANDS[];
 namespace Protocol
 {
 
-    enum class MasterCommand : uint8_t
+    enum class Command : uint8_t
     {
         INVALID,
         IDENT,
@@ -24,15 +24,6 @@ namespace Protocol
         STOP,
         PAUSE,
         RESET
-    };
-
-    enum class ClientCommand : uint8_t
-    {
-        INVALID,
-        IDENT,
-        STATUS,
-        ALIVE,
-        CUSTOM // creates a new custom command available to the user
     };
 
     enum class ClientState : uint8_t
@@ -47,11 +38,7 @@ namespace Protocol
 #pragma pack(push,1)
     struct PacketHeader
     {
-        union
-        {
-            MasterCommand masterCommandID = MasterCommand::INVALID;
-            ClientCommand clientCommandID;
-        };
+        Command command;
 
         operator uint8_t* () { return reinterpret_cast<uint8_t*>(this); }
 
@@ -65,8 +52,4 @@ namespace Protocol
     };
     
 #pragma pack(pop)
-
-    bool sendCommand(WiFiClient& client, MasterCommand command);
-    bool sendCommand(WiFiClient& client, MasterCommand command, const char* data);
-    bool sendCommand(WiFiClient& client, MasterCommand command, const uint8_t* data, uint32_t length);
 } // namespace Protocol

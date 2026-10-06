@@ -46,6 +46,8 @@ void Master::init()
     addPeerCommand("reset", "Reset the peer.");
     cli.addCommand("peers").setDescription("List connected peers.");
     cli.addCommand("help").setDescription("Show available commands.");
+
+    m_Interface.begin();
 }
 
 Master& Master::getInstance()
@@ -63,13 +65,43 @@ bool Master::sendCommandToPeer(uint8_t peerIndex, Protocol::MasterCommand comman
     return animator.alive() && animator.sendCommand(command);
 }
 
+bool Master::getPeerName(uint8_t peerIndex, char* name, size_t nameSize) const
+{
+    if (name == nullptr || nameSize == 0)
+        return false;
+
+    name[0] = '\0';
+    if (peerIndex >= DEFINE_MAX_CLIENT || m_Seats[peerIndex] == nullptr)
+        return false;
+
+    const char* peerName = m_Seats[peerIndex]->getName();
+    if (peerName[0] == '\0' || strncmp(peerName, "Unauthentified", 14) == 0)
+        return false;
+
+    strncpy(name, peerName, nameSize - 1);
+    name[nameSize - 1] = '\0';
+    return true;
+}
+
 void Master::loop()
 {
-    WiFiClient client = m_Server.accept();
+    m_Interface.loop(*this);
+
+    WiFiClient client = m_Server.available();
 
     if (client)
     {
-        if (!emplaceFree(m_Seats, m_Animators, client))
+        bool alreadyRegistered = false;
+        for (AnimatorSeat seat : m_Seats)
+        {
+            if (seat != nullptr && seat->isSameConnection(client))
+            {
+                alreadyRegistered = true;
+                break;
+            }
+        }
+
+        if (!alreadyRegistered && !emplaceFree(m_Seats, m_Animators, client))
         {
             client.println("ERROR : Too many client connected.");
             client.stop();
@@ -95,11 +127,38 @@ void Master::loop()
 
     }
 
-    if (Serial.available())
+    static char serialInput[64];
+    static size_t serialInputLength = 0;
+    static bool serialInputOverflow = false;
+
+    while (Serial.available() > 0)
     {
-        String input = Serial.readStringUntil('\n');
-        if (input.length() > 0)
-            cli.parse(input);
+        const char value = static_cast<char>(Serial.read());
+
+        if (value == '\r')
+            continue;
+
+        if (value == '\n')
+        {
+            if (serialInputOverflow)
+            {
+                Serial.println("Serial command too long; discarded.");
+            }
+            else if (serialInputLength > 0)
+            {
+                serialInput[serialInputLength] = '\0';
+                cli.parse(serialInput);
+            }
+
+            serialInputLength = 0;
+            serialInputOverflow = false;
+            continue;
+        }
+
+        if (serialInputLength < sizeof(serialInput) - 1)
+            serialInput[serialInputLength++] = value;
+        else
+            serialInputOverflow = true;
     }
 
     while (cli.available())

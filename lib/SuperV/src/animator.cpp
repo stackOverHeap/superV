@@ -196,6 +196,11 @@ char* Animator::getName()
     return m_Name;
 }
 
+bool Animator::isSameConnection(const WiFiClient& client)
+{
+    return WiFiClient::operator==(client);
+}
+
 void Animator::setName(char* nameString)
 {
     strncpy(m_Name, nameString, sizeof(m_Name));

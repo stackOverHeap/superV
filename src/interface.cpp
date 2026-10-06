@@ -3,6 +3,9 @@
 #include <superv/logging.hpp>
 #include <superv/master.hpp>
 
+#include <stdio.h>
+#include <string.h>
+
 namespace {
 constexpr uint8_t TFT_CS_PIN = 10;
 constexpr uint8_t TFT_DC_PIN = 8;
@@ -20,7 +23,7 @@ struct CommandOption {
 	Protocol::MasterCommand command;
 };
 
-constexpr CommandOption COMMANDS[] = {
+static constexpr CommandOption commandText[] = {
 		{"IDENT", Protocol::MasterCommand::IDENT},
 		{"STATUS", Protocol::MasterCommand::STATUS},
 		{"ALIVE", Protocol::MasterCommand::ALIVE},
@@ -29,7 +32,7 @@ constexpr CommandOption COMMANDS[] = {
 		{"PAUSE", Protocol::MasterCommand::PAUSE},
 		{"RESET", Protocol::MasterCommand::RESET},
 };
-constexpr uint8_t COMMAND_COUNT = sizeof(COMMANDS) / sizeof(COMMANDS[0]);
+constexpr uint8_t COMMAND_COUNT = sizeof(commandText) / sizeof(commandText[0]);
 
 constexpr int8_t ENCODER_TRANSITIONS[16] = {
 		0, -1, 1, 0,
@@ -89,10 +92,45 @@ void Interface::begin() {
 void Interface::loop(Master& master) {
 	readEncoder();
 	readButtons(master);
+	refreshPeerLabels(master);
 
 	if (_feedback != nullptr &&
 			static_cast<long>(millis() - _feedbackUntilMs) >= 0) {
 		_feedback = nullptr;
+		draw();
+	}
+}
+
+void Interface::refreshPeerLabels(Master& master) {
+	bool changed = false;
+
+	for (uint8_t index = 0; index < 4; ++index) {
+		char peerName[STATIC_BUFFER_SIZE];
+		char label[sizeof(_peerLabels[index])];
+		if (master.getPeerName(index, peerName, sizeof(peerName))) {
+			snprintf(
+					label,
+					sizeof(label),
+					"P%u %.5s",
+					static_cast<unsigned int>(index + 1),
+					peerName);
+		} else {
+			snprintf(
+					label,
+					sizeof(label),
+					"P%u ANIM%u",
+					static_cast<unsigned int>(index + 1),
+					static_cast<unsigned int>(index + 1));
+		}
+
+		if (strcmp(_peerLabels[index], label) != 0) {
+			strncpy(_peerLabels[index], label, sizeof(_peerLabels[index]) - 1);
+			_peerLabels[index][sizeof(_peerLabels[index]) - 1] = '\0';
+			changed = true;
+		}
+	}
+
+	if (changed) {
 		draw();
 	}
 }
@@ -136,6 +174,9 @@ void Interface::readButtons(Master& master) {
 				button.stablePressed != button.rawPressed) {
 			button.stablePressed = button.rawPressed;
 			if (button.stablePressed) {
+				Serial.print("Button P");
+				Serial.print(index + 1);
+				Serial.println(" pressed");
 				sendSelectedCommand(master, index);
 			}
 		}
@@ -145,7 +186,7 @@ void Interface::readButtons(Master& master) {
 void Interface::sendSelectedCommand(Master& master, uint8_t peerIndex) {
 	const bool sent = master.sendCommandToPeer(
 			peerIndex,
-			COMMANDS[_selectedCommand].command);
+			commandText[_selectedCommand].command);
 
 	_feedback = sent ? "ORDRE ENVOYE" : "ANIMATION ABSENTE";
 	_feedbackColor = sent ? ST77XX_GREEN : ST77XX_RED;
@@ -153,7 +194,7 @@ void Interface::sendSelectedCommand(Master& master, uint8_t peerIndex) {
 	draw();
 
 	if (sent) {
-		LOGI("Sent %s to animation %u", COMMANDS[_selectedCommand].label,
+		LOGI("Sent %s to animation %u", commandText[_selectedCommand].label,
 				 peerIndex + 1);
 	} else {
 		LOGW("Animation %u is not connected", peerIndex + 1);
@@ -187,7 +228,7 @@ void Interface::draw() {
 	uint16_t textWidth = 0;
 	uint16_t textHeight = 0;
 	_display.getTextBounds(
-			COMMANDS[_selectedCommand].label,
+			commandText[_selectedCommand].label,
 			0,
 			0,
 			&textX,
@@ -195,7 +236,7 @@ void Interface::draw() {
 			&textWidth,
 			&textHeight);
 	_display.setCursor((128 - textWidth) / 2, 55);
-	_display.print(COMMANDS[_selectedCommand].label);
+	_display.print(commandText[_selectedCommand].label);
 
 	_display.setTextSize(1);
 	_display.setTextColor(ST77XX_WHITE);
@@ -209,10 +250,7 @@ void Interface::draw() {
 		_display.setTextColor(ST77XX_WHITE);
 		_display.setTextSize(1);
 		_display.setCursor(x + 7, y + 6);
-		_display.print("P");
-		_display.print(index + 1);
-		_display.print(" ANIM");
-		_display.print(index + 1);
+		_display.print(_peerLabels[index]);
 	}
 
 	if (_feedback != nullptr) {

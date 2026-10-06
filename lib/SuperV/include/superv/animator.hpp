@@ -49,6 +49,7 @@ public:
 
     bool sendCommand(Protocol::MasterCommand command);
     char* getName();
+    bool isSameConnection(const WiFiClient& client);
 
     void setName(char* nameString);
     bool addCustom(char* commandString, int len);

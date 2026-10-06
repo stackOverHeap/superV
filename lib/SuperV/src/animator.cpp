@@ -232,25 +232,10 @@ const char* Animator::getName() const
     return m_Name;
 }
 
-void Animator::setName(const const char* nameString)
+void Animator::setName(const char* nameString)
 {
     strncpy(m_Name, nameString, sizeof(m_Name) - 1);
     m_Name[sizeof(m_Name) - 1] = '\0';
-}
-
-uint8_t Animator::getCustomCount()
-{
-    return m_customCommandCount;
-}
-
-Protocol::CustomCommand Animator::getCustom(uint8_t index)
-{
-    if (index < DEFINE_CLIENT_CUSTOM_MAX)
-    {
-        return m_customCommands[index];
-    }
-
-    return CustomCommand();
 }
 
 uint8_t Animator::getCustomCount()

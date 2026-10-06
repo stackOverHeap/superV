@@ -57,7 +57,6 @@ public:
     const char* getName() const;
 
     void setName(const char* nameString);
-    void setName(const char* nameString);
     bool addCustom(char* commandString, int len);
     Protocol::CustomCommand getCustom(uint8_t index);
     uint8_t getCustomCount();

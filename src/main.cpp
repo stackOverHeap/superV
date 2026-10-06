@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <superv/logging.hpp>
+#include "benchmark.hpp"
 
 #if defined(MASTER_MODE) && defined(CLIENT_MODE)
 #error "Select exactly one build mode: MASTER_MODE or CLIENT_MODE"

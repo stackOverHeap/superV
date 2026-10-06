@@ -79,7 +79,7 @@ Master& Master::getInstance()
     return instance;
 }
 
-bool Master::sendCommandToPeer(uint8_t peerIndex, Protocol::MasterCommand command)
+bool Master::sendCommandToPeer(uint8_t peerIndex, Protocol::Command command)
 {
     if (peerIndex >= DEFINE_MAX_CLIENT || m_Seats[peerIndex] == nullptr)
         return false;

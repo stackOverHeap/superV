@@ -114,6 +114,7 @@ void Animator::receive(int& avail)
 
     if (m_CurrentPacketStatus == PacketReceptionStatus::HEADER)
     {
+        memset(m_DataBuffer, 0, sizeof(m_DataBuffer));
         readBytes(reinterpret_cast<uint8_t*>(&m_DataBuffer), m_CurrentPacket.followingLength);
         avail -= m_CurrentPacket.followingLength;
 
@@ -140,6 +141,14 @@ void Animator::receive(int& avail)
         case ClientCommand::ALIVE:
             m_LastAliveResponseMS = millis();
             break;
+
+        case ClientCommand::CUSTOM:
+        {
+            Protocol::CustomCommand command;
+            memcpy(&command, m_DataBuffer, min(sizeof(m_DataBuffer), sizeof(Protocol::CustomCommand)));
+            createCustom(command);
+        }
+        break;
         default:
             break;
         }
@@ -191,6 +200,17 @@ bool Animator::sendCommand(MasterCommand command)
     return true;
 }
 
+bool Animator::createCustom(Protocol::CustomCommand& command)
+{
+
+    if (command.commandID >= DEFINE_CLIENT_CUSTOM_MAX)
+        return false;
+
+    m_customCommandCount = command.commandID + 1;
+    m_customCommands[command.commandID] = command;
+    return true;
+}
+
 char* Animator::getName()
 {
     return m_Name;
@@ -199,4 +219,19 @@ char* Animator::getName()
 void Animator::setName(char* nameString)
 {
     strncpy(m_Name, nameString, sizeof(m_Name));
+}
+
+uint8_t Animator::getCustomCount()
+{
+    return m_customCommandCount;
+}
+
+Protocol::CustomCommand Animator::getCustom(uint8_t index)
+{
+    if (index < DEFINE_CLIENT_CUSTOM_MAX)
+    {
+        return m_customCommands[index];
+    }
+
+    return CustomCommand();
 }

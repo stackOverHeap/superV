@@ -26,7 +26,7 @@ class Animator : private WiFiClient
     Protocol::PacketHeader m_CurrentPacket;
     PacketReceptionStatus m_CurrentPacketStatus = PacketReceptionStatus::WAITING;
     uint32_t m_PacketBytesLeft = 0;
-    int      m_LastAvail = 0;       // bytes still in the RX buffer after the previous poll
+    int m_LastAvail = 0;       // bytes still in the RX buffer after the previous poll
     uint32_t m_LastReceptionMS = 0;
     uint32_t m_LastHeartbeatMS = 0;
     uint32_t m_LastAliveResponseMS = 0;
@@ -34,7 +34,8 @@ class Animator : private WiFiClient
 
     void receive(int& avail);
 
-    // TODO : implement the custom command list here
+    Protocol::CustomCommand m_customCommands[DEFINE_CLIENT_CUSTOM_MAX];
+    uint8_t m_customCommandCount = 0;
 
 public:
     Animator() = default;
@@ -48,8 +49,11 @@ public:
     inline uint8_t getCount() { return m_AnimatorCount; };
 
     bool sendCommand(Protocol::MasterCommand command);
+    bool createCustom(Protocol::CustomCommand& command);
     char* getName();
 
     void setName(char* nameString);
     bool addCustom(char* commandString, int len);
+    Protocol::CustomCommand getCustom(uint8_t index);
+    uint8_t getCustomCount();
 };

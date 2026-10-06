@@ -4,9 +4,7 @@
 
 #include <stdio.h>
 
-using Protocol::ClientCommand;
-using Protocol::ClientState;
-using Protocol::MasterCommand;
+using namespace Protocol;
 
 
 constexpr uint32_t MAX_PACKET_PAYLOAD = 4096;
@@ -40,23 +38,22 @@ bool readExact(WiFiClient& client, uint8_t* buffer, size_t length) {
   return received == length;
 }
 
-bool sendClientResponse(WiFiClient& client, ClientCommand command, const void* payload, size_t length) {
+bool sendClientResponse(WiFiClient& client, ClientCommand command, const void* payload = nullptr, size_t length = 0) {
 
-  const uint8_t header[PACKET_HEADER_SIZE] = {
-      static_cast<uint8_t>(PROTOCOL_SIGNATURE & 0xff),
-      static_cast<uint8_t>((PROTOCOL_SIGNATURE >> 8) & 0xff),
-      static_cast<uint8_t>(command),
-      static_cast<uint8_t>(length & 0xff),
-      static_cast<uint8_t>((length >> 8) & 0xff),
-      static_cast<uint8_t>((length >> 16) & 0xff),
-      static_cast<uint8_t>((length >> 24) & 0xff),
-  };
+  PacketSignature signature = PROTOCOL_SIGNATURE;
 
-  if (client.write(header, sizeof(header)) != sizeof(header)) {
-    return false;
-  }
+  PacketHeader header;
+  header.clientCommandID = command;
+  header.followingLength = length;
 
-  return length == 0 || client.write(reinterpret_cast<const uint8_t*>(payload), length) == length;
+  uint32_t sent = 0;
+  sent += client.write(reinterpret_cast<uint8_t*>(&signature), sizeof(PacketSignature));
+  sent += client.write(header, sizeof(PacketHeader));
+  sent += client.write(reinterpret_cast<const uint8_t*>(payload), length);
+
+  LOGI("Sent %u, payload %p, length %u, sent %u", command, payload, length, sent);
+
+  return sent == sizeof(PacketSignature) + sizeof(header) + length;
 }
 
 String stateName(ClientState state) {
@@ -73,6 +70,7 @@ String stateName(ClientState state) {
 
 RemoteCommandClient::RemoteCommandClient(bool realTimeNeed) : m_realTime(realTimeNeed)
 {
+
 }
 
 void RemoteCommandClient::setup()
@@ -212,7 +210,6 @@ void RemoteCommandClient::normalLoop() {
     // The supervisor stores the IDENT payload directly as the client name.
     if (!sendClientResponse(_client, ClientCommand::IDENT, _deviceId.c_str(), _deviceId.length())) {
       LOGE("Failed to send IDENT response");
-      _client.stop();
     }
     break;
   }
@@ -456,6 +453,22 @@ void RemoteCommandClient::setRealTimeNeed(bool realTimeNeed)
 void RemoteCommandClient::setIdentity(const char* deviceId) {
   if (deviceId != nullptr) {
     _deviceId = deviceId;
+  }
+}
+
+void RemoteCommandClient::createCustom(const char* commandName)
+{
+  if (m_customCommandCount < DEFINE_CLIENT_CUSTOM_MAX)
+  {
+    Protocol::CustomCommand command;
+    strncpy(command.commandName, commandName, sizeof(Protocol::CustomCommand::commandName));
+    command.commandID = m_customCommandCount;
+
+    m_customCommands[command.commandID] = command;
+
+    sendClientResponse(_client, ClientCommand::CUSTOM, &m_customCommands[m_customCommandCount],
+                        min(strlen(commandName) + sizeof(Protocol::CustomCommand::commandID), sizeof(Protocol::CustomCommand)));
+    m_customCommandCount++;
   }
 }
 

@@ -45,7 +45,10 @@ void Master::init()
     addPeerCommand("pause", "Pause the peer.");
     addPeerCommand("reset", "Reset the peer.");
     cli.addCommand("peers").setDescription("List connected peers.");
-    cli.addCommand("help").setDescription("Show available commands.");
+
+    auto helpCMD = cli.addCommand("help");
+    helpCMD.setDescription("Show available commands.");
+    helpCMD.addPositionalArgument("target", "all");
 }
 
 Master& Master::getInstance()
@@ -101,7 +104,39 @@ void Master::loop()
 
         if (commandName == "help")
         {
-            Serial.println(cli.toString());
+            bool foundPeer = false;
+            Argument arg = command.getArg();
+
+            if (arg.getValue().equals("all"))
+            {
+                Serial.println(cli.toString());
+                continue;
+            }
+
+            for (AnimatorSeat seat : m_Seats)
+            {
+                if (seat == nullptr)
+                    continue;
+
+                Animator& target = *seat;
+
+                if (arg.getValue().equals(target.getName()))
+                {
+                    foundPeer = true;
+
+                    Serial.println("Peer registered custom commands :");
+
+                    for (uint8_t i = 0; i < target.getCustomCount(); i++)
+                    {
+                        auto command = target.getCustom(i);
+                        Serial.println(command.commandName);
+                    }
+                }
+            }
+
+            if (!foundPeer)
+                Serial.println("No matching connected peers.");
+
             continue;
         }
 
@@ -110,7 +145,7 @@ void Master::loop()
             bool foundPeer = false;
             for (AnimatorSeat seat : m_Seats)
             {
-                if (seat == nullptr || !seat->alive())
+                if (seat == nullptr)
                     continue;
 
                 Serial.println(seat->getName());

@@ -33,6 +33,7 @@ public:
   void setCommandHandlers(const ClientCommandHandlers& handlers, void* context = nullptr);
   void setRealTimeNeed(bool realTimeNeed);
   void setIdentity(const char* deviceId);
+  void createCustom(const char * commandName);
 
   void startSystem();
   void stopSystem();
@@ -67,5 +68,7 @@ private:
   Protocol::ClientState _state = Protocol::ClientState::WAITING;
   String _deviceId = "Arduino_01";
   ClientCommandHandlers _handlers;
+  Protocol::CustomCommand m_customCommands[DEFINE_CLIENT_CUSTOM_MAX];
+  uint8_t m_customCommandCount = 0;
   void* _handlerContext = nullptr;
 };

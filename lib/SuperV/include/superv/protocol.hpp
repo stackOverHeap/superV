@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <WiFi.h>
+#include <superv/defines.hpp>
 
 #ifdef LOGGING
 extern char* COMMANDS[];
@@ -56,11 +57,16 @@ namespace Protocol
 
         uint32_t followingLength = 0;
     };
+
+    struct CustomCommand
+    {
+        uint8_t commandID = 0;
+        char commandName[STATIC_BUFFER_SIZE - 1] = {0};
+    };
+    
 #pragma pack(pop)
 
     bool sendCommand(WiFiClient& client, MasterCommand command);
     bool sendCommand(WiFiClient& client, MasterCommand command, const char* data);
     bool sendCommand(WiFiClient& client, MasterCommand command, const uint8_t* data, uint32_t length);
 } // namespace Protocol
-
-#define PROTOCOL_PACKET_SIZE_LIMIT sizeof(Protocol::PacketSignature) + sizeof(Protocol::PacketHeader) + 512

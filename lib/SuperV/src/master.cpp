@@ -4,6 +4,7 @@
 
 #include <superv/logging.hpp>
 #include <superv/protocol.hpp>
+#include <stdio.h>
 
 static SimpleCLI cli;
 
@@ -22,12 +23,32 @@ static bool emplaceFree(AnimatorSeat(&seats)[SIZE], Animator(&locations)[SIZE], 
         if (seats[i] == nullptr) // free seat, claim it
         {
             locations[i] = Animator(client); // copy to location
+            char name[STATIC_BUFFER_SIZE];
+            snprintf(name, sizeof(name), "anim%d", i + 1);
+            locations[i].setName(name);
             seats[i] = &locations[i];
+            LOGI("New animator connected as %s (%u/%u)",
+                 locations[i].getName(), locations[i].getCount(),
+                 DEFINE_MAX_CLIENT);
             return true;
         }
     }
 
     return false;
+}
+
+bool Master::getPeerName(uint8_t peerIndex, char* name, size_t nameSize) const
+{
+    if (name == nullptr || nameSize == 0)
+        return false;
+
+    name[0] = '\0';
+    if (peerIndex >= DEFINE_MAX_CLIENT || m_Seats[peerIndex] == nullptr ||
+        !m_Seats[peerIndex]->alive())
+        return false;
+
+    snprintf(name, nameSize, "%s", m_Seats[peerIndex]->getName());
+    return true;
 }
 
 void Master::init()
@@ -46,6 +67,7 @@ void Master::init()
     addPeerCommand("reset", "Reset the peer.");
     cli.addCommand("peers").setDescription("List connected peers.");
     cli.addCommand("help").setDescription("Show available commands.");
+    m_Interface.begin();
 }
 
 Master& Master::getInstance()
@@ -54,8 +76,19 @@ Master& Master::getInstance()
     return instance;
 }
 
+bool Master::sendCommandToPeer(uint8_t peerIndex, Protocol::MasterCommand command)
+{
+    if (peerIndex >= DEFINE_MAX_CLIENT || m_Seats[peerIndex] == nullptr)
+        return false;
+
+    Animator& animator = *m_Seats[peerIndex];
+    return animator.alive() && animator.sendCommand(command);
+}
+
 void Master::loop()
 {
+    m_Interface.loop(*this);
+
     WiFiClient client = m_Server.accept();
 
     if (client)

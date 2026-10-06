@@ -54,8 +54,9 @@ public:
 
     bool sendCommand(Protocol::Command command, const void* payload = nullptr, size_t length = 0);
 
-    char* getName();
+    const char* getName() const;
 
+    void setName(const char* nameString);
     void setName(const char* nameString);
     bool addCustom(char* commandString, int len);
     Protocol::CustomCommand getCustom(uint8_t index);

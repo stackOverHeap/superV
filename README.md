@@ -69,6 +69,62 @@ The `RemoteCommandClient` constructor admit an optional `realTime` boolean value
 `setup()` joins the supervisor Wi-Fi network, then connects to the supervisor
 at `192.168.4.1` on port `DEFINE_SERVER_PORT` (90 by default).
 
+## Custom commands
+
+Clients can register eight additional application-specific commands that the master
+can trigger remotely. Register each command on the client side and provide a
+callback that receives the command ID assigned to the call:
+
+```cpp
+#include <Arduino.h>
+#include <superv/client.hpp>
+
+RemoteCommandClient client;
+
+void onCustom(uint8_t commandIndex) {
+  switch (commandIndex) {
+    case 0:
+      Serial.println("reboot command received");
+      break;
+    case 1:
+      Serial.println("flash command received");
+      break;
+    default:
+      Serial.println("unknown custom command");
+      break;
+  }
+}
+
+void setup() {
+  ClientCommandHandlers handlers;
+  handlers.onCustom = onCustom;
+
+  client.setIdentity("printer");
+  client.setCommandHandlers(handlers);
+  client.registerCustomCommands("reboot", 0);
+  client.registerCustomCommands("flash", 1);
+  client.setup();
+}
+```
+
+On the supervisor side, the built-in Serial interface exposes the custom command
+entry point:
+
+```text
+custom <peer> <command>
+```
+
+For example, after the peer is connected and has registered `reboot` and
+`flash`, the master can send:
+
+```text
+custom anim1 reboot
+custom anim1 flash
+```
+
+The master command list also includes `help <peer>` to display the custom
+commands registered by a specific connected client.
+
 For a project that runs the supervisor instead, include
 `<superv/master.hpp>`, call `Master::getInstance().init()` in `setup()`, and
 call its `loop()` method from the Arduino `loop()`. The master creates the

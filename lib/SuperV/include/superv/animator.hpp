@@ -35,10 +35,11 @@ protected:
 
     void receiveCommand(int& avail);
     bool createCustom(Protocol::CustomCommand& command);
-    virtual void handleCommand(Protocol::Command command);
+    virtual void handleCommand(Protocol::Command command, uint32_t dataLength = 0);
 
     Protocol::CustomCommand m_customCommands[DEFINE_CLIENT_CUSTOM_MAX];
-    uint8_t m_customCommandCount = 0;
+    uint8_t m_registeredCustomCommandMask = 0;
+    bool m_synced = false;
 
 public:
     Animator() = default;
@@ -57,7 +58,9 @@ public:
     const char* getName() const;
 
     void setName(const char* nameString);
+
     bool addCustom(char* commandString, int len);
+    uint8_t nameToCustomCommandId(const char * commandName);
     Protocol::CustomCommand getCustom(uint8_t index);
-    uint8_t getCustomCount();
+    bool isCustomCommandSet(uint8_t index);
 };

@@ -28,8 +28,8 @@ static bool emplaceFree(AnimatorSeat(&seats)[SIZE], Animator(&locations)[SIZE], 
             locations[i].setName(name);
             seats[i] = &locations[i];
             LOGI("New animator connected as %s (%u/%u)",
-                 locations[i].getName(), locations[i].getCount(),
-                 DEFINE_MAX_CLIENT);
+                locations[i].getName(), locations[i].getCount(),
+                DEFINE_MAX_CLIENT);
             return true;
         }
     }
@@ -60,7 +60,12 @@ void Master::init()
     addPeerCommand("ident", "Request the peer identity.");
     addPeerCommand("status", "Request the peer status.");
     addPeerCommand("alive", "Check whether the peer is alive.");
-    addPeerCommand("custom", "Send a custom-command request to the peer.");
+
+    auto customCMD = cli.addCommand("custom");
+    customCMD.setDescription("Send a custom-command request to the peer.");
+    customCMD.addPositionalArgument("peer");
+    customCMD.addPositionalArgument("command");
+
     addPeerCommand("start", "Start the peer.");
     addPeerCommand("stop", "Stop the peer.");
     addPeerCommand("pause", "Pause the peer.");
@@ -70,6 +75,7 @@ void Master::init()
     auto helpCMD = cli.addCommand("help");
     helpCMD.setDescription("Show available commands.");
     helpCMD.addPositionalArgument("target", "all");
+
     m_Interface.begin();
 }
 
@@ -159,8 +165,11 @@ void Master::loop()
 
                     Serial.println("Peer registered custom commands :");
 
-                    for (uint8_t i = 0; i < target.getCustomCount(); i++)
+                    for (uint8_t i = 0; i < DEFINE_CLIENT_CUSTOM_MAX; i++)
                     {
+                        if (!target.isCustomCommandSet(i))
+                            continue;
+
                         auto command = target.getCustom(i);
                         Serial.println(command.commandName);
                     }
@@ -210,6 +219,7 @@ void Master::loop()
         }
 
         Protocol::Command protocolCommand;
+
         if (commandName == "ident")
             protocolCommand = Protocol::Command::IDENT;
         else if (commandName == "status")
@@ -233,8 +243,25 @@ void Master::loop()
             continue;
         }
 
+        if (protocolCommand == Protocol::Command::CUSTOM)
+        {
+            uint8_t commandID = peer->nameToCustomCommandId(command.getArgument("command").getValue().c_str());
+            if (commandID >= DEFINE_CLIENT_CUSTOM_MAX) // mean the peer does not exists
+            {
+                Serial.println("Command does not exist");
+                continue;
+            }
+            
+            if (peer->sendCommand(Protocol::Command::CUSTOM, &commandID, sizeof(commandID)))
+                goto sendOK;
+            else
+                goto sendNOK;
+            
+        }
+
         if (peer->sendCommand(protocolCommand))
         {
+sendOK:
             Serial.print("Sent ");
             Serial.print(commandName);
             Serial.print(" to ");
@@ -242,6 +269,7 @@ void Master::loop()
         }
         else
         {
+sendNOK:
             Serial.print("Failed to send ");
             Serial.print(commandName);
             Serial.print(" to ");

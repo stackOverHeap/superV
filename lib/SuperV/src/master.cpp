@@ -66,7 +66,10 @@ void Master::init()
     addPeerCommand("pause", "Pause the peer.");
     addPeerCommand("reset", "Reset the peer.");
     cli.addCommand("peers").setDescription("List connected peers.");
-    cli.addCommand("help").setDescription("Show available commands.");
+
+    auto helpCMD = cli.addCommand("help");
+    helpCMD.setDescription("Show available commands.");
+    helpCMD.addPositionalArgument("target", "all");
     m_Interface.begin();
 }
 
@@ -76,7 +79,7 @@ Master& Master::getInstance()
     return instance;
 }
 
-bool Master::sendCommandToPeer(uint8_t peerIndex, Protocol::MasterCommand command)
+bool Master::sendCommandToPeer(uint8_t peerIndex, Protocol::Command command)
 {
     if (peerIndex >= DEFINE_MAX_CLIENT || m_Seats[peerIndex] == nullptr)
         return false;
@@ -134,7 +137,39 @@ void Master::loop()
 
         if (commandName == "help")
         {
-            Serial.println(cli.toString());
+            bool foundPeer = false;
+            Argument arg = command.getArg();
+
+            if (arg.getValue().equals("all"))
+            {
+                Serial.println(cli.toString());
+                continue;
+            }
+
+            for (AnimatorSeat seat : m_Seats)
+            {
+                if (seat == nullptr)
+                    continue;
+
+                Animator& target = *seat;
+
+                if (arg.getValue().equals(target.getName()))
+                {
+                    foundPeer = true;
+
+                    Serial.println("Peer registered custom commands :");
+
+                    for (uint8_t i = 0; i < target.getCustomCount(); i++)
+                    {
+                        auto command = target.getCustom(i);
+                        Serial.println(command.commandName);
+                    }
+                }
+            }
+
+            if (!foundPeer)
+                Serial.println("No matching connected peers.");
+
             continue;
         }
 
@@ -143,7 +178,7 @@ void Master::loop()
             bool foundPeer = false;
             for (AnimatorSeat seat : m_Seats)
             {
-                if (seat == nullptr || !seat->alive())
+                if (seat == nullptr)
                     continue;
 
                 Serial.println(seat->getName());
@@ -174,23 +209,23 @@ void Master::loop()
             continue;
         }
 
-        Protocol::MasterCommand protocolCommand;
+        Protocol::Command protocolCommand;
         if (commandName == "ident")
-            protocolCommand = Protocol::MasterCommand::IDENT;
+            protocolCommand = Protocol::Command::IDENT;
         else if (commandName == "status")
-            protocolCommand = Protocol::MasterCommand::STATUS;
+            protocolCommand = Protocol::Command::STATUS;
         else if (commandName == "alive")
-            protocolCommand = Protocol::MasterCommand::ALIVE;
+            protocolCommand = Protocol::Command::ALIVE;
         else if (commandName == "custom")
-            protocolCommand = Protocol::MasterCommand::CUSTOM;
+            protocolCommand = Protocol::Command::CUSTOM;
         else if (commandName == "start")
-            protocolCommand = Protocol::MasterCommand::START;
+            protocolCommand = Protocol::Command::START;
         else if (commandName == "stop")
-            protocolCommand = Protocol::MasterCommand::STOP;
+            protocolCommand = Protocol::Command::STOP;
         else if (commandName == "pause")
-            protocolCommand = Protocol::MasterCommand::PAUSE;
+            protocolCommand = Protocol::Command::PAUSE;
         else if (commandName == "reset")
-            protocolCommand = Protocol::MasterCommand::RESET;
+            protocolCommand = Protocol::Command::RESET;
         else
         {
             Serial.print("Unknown command: ");

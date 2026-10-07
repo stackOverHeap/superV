@@ -23,7 +23,7 @@ public:
     static Master &getInstance();
     void loop();
     void init();
-    bool sendCommandToPeer(uint8_t peerIndex, Protocol::MasterCommand command);
+    bool sendCommandToPeer(uint8_t peerIndex, Protocol::Command command);
     bool getPeerName(uint8_t peerIndex, char* name, size_t nameSize) const;
 
 };

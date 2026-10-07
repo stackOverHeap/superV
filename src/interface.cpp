@@ -19,17 +19,17 @@ constexpr unsigned long BUTTON_DEBOUNCE_MS = 30;
 
 struct CommandOption {
 	const char* label;
-	Protocol::MasterCommand command;
+	Protocol::Command command;
 };
 
 constexpr CommandOption commandText[] = {
-		{"IDENT", Protocol::MasterCommand::IDENT},
-		{"STATUS", Protocol::MasterCommand::STATUS},
-		{"ALIVE", Protocol::MasterCommand::ALIVE},
-		{"START", Protocol::MasterCommand::START},
-		{"STOP", Protocol::MasterCommand::STOP},
-		{"PAUSE", Protocol::MasterCommand::PAUSE},
-		{"RESET", Protocol::MasterCommand::RESET},
+		{"IDENT", Protocol::Command::IDENT},
+		{"STATUS", Protocol::Command::STATUS},
+		{"ALIVE", Protocol::Command::ALIVE},
+		{"START", Protocol::Command::START},
+		{"STOP", Protocol::Command::STOP},
+		{"PAUSE", Protocol::Command::PAUSE},
+		{"RESET", Protocol::Command::RESET},
 };
 constexpr uint8_t COMMAND_COUNT = sizeof(commandText) / sizeof(commandText[0]);
 

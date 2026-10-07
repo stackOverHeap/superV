@@ -13,7 +13,13 @@ Animator::Animator(const WiFiClient& client) : WiFiClient(client)
     m_LastHeartbeatMS = millis();
     m_LastAliveResponseMS = m_LastHeartbeatMS;
     m_AnimatorCount++;
-    sendCommand(MasterCommand::IDENT);
+    sprintf(m_Name, "Unauthentified%u", m_AnimatorCount);
+    LOGI("New animator connected as %s (%u/%u)", m_Name, m_AnimatorCount, DEFINE_MAX_CLIENT);
+    sendCommand(Command::IDENT);
+}
+
+void Animator::loop()
+{
 }
 
 void Animator::poll()
@@ -51,11 +57,11 @@ void Animator::poll()
         return;
     }
 
-    receive(avail);
+    receiveCommand(avail);
     m_LastAvail = avail;                           // must be what is really left
 }
 
-void Animator::receive(int& avail)
+void Animator::receiveCommand(int& avail)
 {
     if (m_CurrentPacketStatus == PacketReceptionStatus::WAITING)
     {
@@ -113,6 +119,7 @@ void Animator::receive(int& avail)
 
     if (m_CurrentPacketStatus == PacketReceptionStatus::HEADER)
     {
+        memset(m_DataBuffer, 0, sizeof(m_DataBuffer));
         readBytes(reinterpret_cast<uint8_t*>(&m_DataBuffer), m_CurrentPacket.followingLength);
         avail -= m_CurrentPacket.followingLength;
 
@@ -125,27 +132,9 @@ void Animator::receive(int& avail)
 
     if (m_CurrentPacketStatus == PacketReceptionStatus::DATA)
     {
-        LOGI("Received command %s from %s", COMMANDS[static_cast<uint8_t>(m_CurrentPacket.clientCommandID)], m_Name);
+        LOGI("Received command %s from %s", COMMANDS[static_cast<uint8_t>(m_CurrentPacket.command)], m_Name);
 
-        switch (m_CurrentPacket.clientCommandID)
-        {
-        case ClientCommand::IDENT:
-            if (m_CurrentPacket.followingLength > 0)
-            {
-                const size_t nameLength =
-                    min(static_cast<size_t>(m_CurrentPacket.followingLength),
-                        sizeof(m_Name) - 1);
-                memcpy(m_Name, m_DataBuffer, nameLength);
-                m_Name[nameLength] = '\0';
-            }
-            break;
-
-        case ClientCommand::ALIVE:
-            m_LastAliveResponseMS = millis();
-            break;
-        default:
-            break;
-        }
+        handleCommand(m_CurrentPacket.command);
         m_CurrentPacketStatus = PacketReceptionStatus::WAITING;
         m_PacketBytesLeft = sizeof(PacketSignature);
     }
@@ -168,7 +157,7 @@ bool Animator::heartbeat()
     if (now - m_LastHeartbeatMS >= DEFINE_HEARTBEAT_INTERVAL_MS)
     {
         m_LastHeartbeatMS = now;
-        return sendCommand(MasterCommand::ALIVE);
+        return sendCommand(Command::ALIVE);
     }
 
     return true;
@@ -182,16 +171,60 @@ void Animator::kill(AnimatorSeat& occupiedSeat)
     occupiedSeat = nullptr;
 }
 
-bool Animator::sendCommand(MasterCommand command)
+bool Animator::sendCommand(Protocol::Command command, const void* payload, size_t length)
 {
-    if (!Protocol::sendCommand(*this, command))
-    {
-        LOGE("Failed to send command. Disconnecting client.");
-        stop();
-        flush();
+    PacketSignature signature = PROTOCOL_SIGNATURE;
+
+    PacketHeader header;
+    header.command = command;
+    header.followingLength = length;
+
+    uint32_t sent = 0;
+    sent += write(reinterpret_cast<uint8_t*>(&signature), sizeof(PacketSignature));
+    sent += write(header, sizeof(PacketHeader));
+    sent += write(reinterpret_cast<const uint8_t*>(payload), length);
+
+    LOGI("Sent %u, payload %p, length %u, sent %u", command, payload, length, sent);
+
+    return sent == sizeof(PacketSignature) + sizeof(PacketHeader) + length;
+}
+
+bool Animator::createCustom(Protocol::CustomCommand& command)
+{
+
+    if (command.commandID >= DEFINE_CLIENT_CUSTOM_MAX)
         return false;
-    }
+
+    m_customCommandCount = command.commandID + 1;
+    m_customCommands[command.commandID] = command;
     return true;
+}
+
+void Animator::handleCommand(Command command)
+{
+    switch (command)
+    {
+    case Command::IDENT:
+        if (m_CurrentPacket.followingLength == 0)
+            break;
+        memset(m_Name, 0, sizeof(m_Name));
+        strncpy(m_Name, m_DataBuffer, sizeof(m_Name) - 1);
+        break;
+
+    case Command::ALIVE:
+        m_LastAliveResponseMS = millis();
+        break;
+
+    case Command::CUSTOM:
+    {
+        Protocol::CustomCommand command;
+        memcpy(&command, m_DataBuffer, min(sizeof(m_DataBuffer), sizeof(Protocol::CustomCommand)));
+        createCustom(command);
+    }
+    break;
+    default:
+        break;
+    }
 }
 
 const char* Animator::getName() const
@@ -203,4 +236,19 @@ void Animator::setName(const char* nameString)
 {
     strncpy(m_Name, nameString, sizeof(m_Name) - 1);
     m_Name[sizeof(m_Name) - 1] = '\0';
+}
+
+uint8_t Animator::getCustomCount()
+{
+    return m_customCommandCount;
+}
+
+Protocol::CustomCommand Animator::getCustom(uint8_t index)
+{
+    if (index < DEFINE_CLIENT_CUSTOM_MAX)
+    {
+        return m_customCommands[index];
+    }
+
+    return CustomCommand();
 }

@@ -134,7 +134,7 @@ void Animator::receiveCommand(int& avail)
     {
         LOGI("Received command %s from %s", COMMANDS[static_cast<uint8_t>(m_CurrentPacket.command)], m_Name);
 
-        handleCommand(m_CurrentPacket.command);
+        handleCommand(m_CurrentPacket.command, m_CurrentPacket.followingLength);
         m_CurrentPacketStatus = PacketReceptionStatus::WAITING;
         m_PacketBytesLeft = sizeof(PacketSignature);
     }
@@ -157,6 +157,7 @@ bool Animator::heartbeat()
     if (now - m_LastHeartbeatMS >= DEFINE_HEARTBEAT_INTERVAL_MS)
     {
         m_LastHeartbeatMS = now;
+        m_synced = false;
         return sendCommand(Command::ALIVE);
     }
 
@@ -195,12 +196,13 @@ bool Animator::createCustom(Protocol::CustomCommand& command)
     if (command.commandID >= DEFINE_CLIENT_CUSTOM_MAX)
         return false;
 
-    m_customCommandCount = command.commandID + 1;
+    bitSet(m_registeredCustomCommandMask, command.commandID);
+    
     m_customCommands[command.commandID] = command;
     return true;
 }
 
-void Animator::handleCommand(Command command)
+void Animator::handleCommand(Command command, uint32_t dataLength)
 {
     switch (command)
     {
@@ -213,15 +215,13 @@ void Animator::handleCommand(Command command)
 
     case Command::ALIVE:
         m_LastAliveResponseMS = millis();
+        m_synced = true;
         break;
 
     case Command::CUSTOM:
-    {
-        Protocol::CustomCommand command;
-        memcpy(&command, m_DataBuffer, min(sizeof(m_DataBuffer), sizeof(Protocol::CustomCommand)));
-        createCustom(command);
-    }
-    break;
+        createCustom(*reinterpret_cast<CustomCommand*>(m_DataBuffer));
+        break;
+        
     default:
         break;
     }
@@ -238,9 +238,15 @@ void Animator::setName(const char* nameString)
     m_Name[sizeof(m_Name) - 1] = '\0';
 }
 
-uint8_t Animator::getCustomCount()
+uint8_t Animator::nameToCustomCommandId(const char* commandName)
 {
-    return m_customCommandCount;
+    for (uint8_t i = 0; i < DEFINE_CLIENT_CUSTOM_MAX; i++)
+    {
+        if (isCustomCommandSet(i) && strcmp(m_customCommands[i].commandName, commandName) == 0)
+            return i;
+    }
+
+    return 255; // invalid command
 }
 
 Protocol::CustomCommand Animator::getCustom(uint8_t index)
@@ -251,4 +257,12 @@ Protocol::CustomCommand Animator::getCustom(uint8_t index)
     }
 
     return CustomCommand();
+}
+
+bool Animator::isCustomCommandSet(uint8_t index)
+{
+    if (index < DEFINE_CLIENT_CUSTOM_MAX)
+        return bitRead(m_registeredCustomCommandMask, index);
+    else
+        return false;
 }

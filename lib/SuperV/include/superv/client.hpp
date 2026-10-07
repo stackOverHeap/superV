@@ -13,32 +13,12 @@ struct ClientCommandHandlers {
   void (*onStop)(void) = nullptr;
   void (*onPause)(void) = nullptr;
   void (*onReset)(void) = nullptr;
-  void (*onCustom)(void) = nullptr;
+  void (*onCustom)(uint8_t commandIndex) = nullptr;
 };
 
-class RemoteCommandClient : public Animator{
-public:
-  RemoteCommandClient() = default;
-  RemoteCommandClient(bool realTimeNeed);
+class RemoteCommandClient : private Animator {
 
-  void setup();
-  void loop() override;
-
-  void handleCommand(Protocol::Command command) override;
-
-  void setCommandHandlers(const ClientCommandHandlers& handlers);
-  void setRealTimeNeed(bool realTimeNeed);
-
-  /*legacy alias*/ void setIdentity(const char* deviceId);
-
-  void startSystem();
-  void stopSystem();
-  void pauseSystem();
-  void resetSystem();
-
-  bool isSystemRunning() const;
-
-private:
+  void handleCommand(Protocol::Command command, uint32_t dataLength = 0) override;
   void connectToMaster(bool connectionKnownLost = false);
 
   void normalLoop();
@@ -53,7 +33,24 @@ private:
   bool m_realTime = false;
 
   char * _deviceId;
-  Protocol::CustomCommand m_customCommands[DEFINE_CLIENT_CUSTOM_MAX];
-  uint8_t m_customCommandCount = 0;
-  void* _handlerContext = nullptr;
+
+public:
+  RemoteCommandClient() = default;
+  RemoteCommandClient(bool realTimeNeed);
+
+  void setup();
+  void loop() override;
+
+
+  void setCommandHandlers(const ClientCommandHandlers& handlers);
+  void registerCustomCommands(const char* commandName, uint8_t commandID);
+  void setRealTimeNeed(bool realTimeNeed);
+
+  /*legacy alias*/ void setIdentity(const char* deviceId);
+
+  void startSystem();
+  void stopSystem();
+  void pauseSystem();
+  void resetSystem();
+  
 };

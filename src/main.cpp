@@ -40,27 +40,27 @@ enum class DemoState : uint8_t {
 
   void onStart(void) {
     demoState = DemoState::RUNNING;
-    LOGI("[APP] START applique: le programme de demonstration tourne.");
+    LOGI("START applique: le programme de demonstration tourne.");
   }
 
   void onStop(void) {
     demoState = DemoState::WAITING;
-    LOGI("[APP] STOP applique: le programme de demonstration est arrete.");
+    LOGI("STOP applique: le programme de demonstration est arrete.");
   }
 
   void onPause(void) {
     demoState = DemoState::PAUSED;
-    LOGI("[APP] PAUSE applique: le programme de demonstration est en pause.");
+    LOGI("PAUSE applique: le programme de demonstration est en pause.");
   }
 
   void onReset(void) {
     demoState = DemoState::WAITING;
     resetCount++;
-    LOGI("[APP] RESET applique. Nombre de resets: %lu", resetCount);
+    LOGI("RESET applique. Nombre de resets: %lu", resetCount);
   }
 
-  void onCustom(void) {
-    LOGI("[APP] CUSTOM");
+  void onCustom(uint8_t commandIndex) {
+    LOGI("CUSTOM slot %u", commandIndex);
   }
 
 void updateDemoLed() {
@@ -97,6 +97,9 @@ void setup() {
 
   client.setIdentity("test");
   client.setCommandHandlers(handlers);
+  client.registerCustomCommands("test1", 0);
+  client.registerCustomCommands("test2", 1);
+  client.registerCustomCommands("test3", 2);
   client.setup();
 }
 

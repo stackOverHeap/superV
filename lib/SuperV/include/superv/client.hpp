@@ -49,23 +49,10 @@ private:
   const uint16_t m_masterPort = DEFINE_SERVER_PORT;
 
   ClientCommandHandlers m_handlers;
-
-
-  unsigned long _lastConnectAttemptMs = 0;
-  unsigned long _lastRealtimePollMs = 0;
-  unsigned long _lastRealtimeWifiCheckMs = 0;
-  unsigned long _lastRealtimeReconnectCheckMs = 0;
-  unsigned long _receiveStartedMs = 0;
-
-  bool _hasAttemptedConnection = false;
+ 
   bool m_realTime = false;
-  uint8_t m_receiveHeader[7] = {};
-  uint8_t m_receiveHeaderBytes = 0;
-  uint8_t m_receiveCommand = 0;
-  uint32_t m_receivePayloadLength = 0;
 
-  Protocol::ClientState _state = Protocol::ClientState::WAITING;
-  String _deviceId = "Arduino_01";
+  char * _deviceId;
   Protocol::CustomCommand m_customCommands[DEFINE_CLIENT_CUSTOM_MAX];
   uint8_t m_customCommandCount = 0;
   void* _handlerContext = nullptr;

@@ -31,7 +31,7 @@ platform = renesas-ra
 board = uno_r4_wifi
 framework = arduino
 lib_deps =
-    https://github.com/stackOverHeap/superV.git#v0.1.0
+    https://github.com/stackOverHeap/superV.git#v1.0.2
 ```
 
 Include the client API and register callbacks for commands your application
@@ -43,7 +43,7 @@ wants to handle:
 
 RemoteCommandClient client;
 
-void onStart(void*) {
+void onStart(void) {
   // Start your application.
 }
 

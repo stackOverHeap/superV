@@ -26,13 +26,6 @@ namespace Protocol
         RESET
     };
 
-    enum class ClientState : uint8_t
-    {
-        RUNNING,
-        PAUSED,
-        WAITING
-    };
-
     using PacketSignature = uint16_t;
 
 #pragma pack(push,1)

@@ -3,7 +3,7 @@
 
 #include <superv/defines.hpp>
 #include <superv/animator.hpp>
-#include <superv/interface.hpp>
+#include "interface.hpp"
 
 class Master
 {

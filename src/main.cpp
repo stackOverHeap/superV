@@ -5,7 +5,7 @@
 #if defined(MASTER_MODE) && defined(CLIENT_MODE)
 #error "Select exactly one build mode: MASTER_MODE or CLIENT_MODE"
 #elif defined(MASTER_MODE)
-#include <superv/master.hpp>
+#include"master.hpp"
 
 Master& master = Master::getInstance();
 

@@ -1,7 +1,7 @@
 #include <interface.hpp>
 
 #include <superv/logging.hpp>
-#include <superv/master.hpp>
+#include "master.hpp"
 #include <stdio.h>
 #include <string.h>
 
